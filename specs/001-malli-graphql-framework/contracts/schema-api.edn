@@ -1,0 +1,158 @@
+;; Malli-GraphQL Framework Public API Contract
+;; This defines the functions that users of the framework will call
+
+{:namespace ringline.schema.parser
+ :functions
+ {:parse-schema
+  {:doc "Parse a Malli schema and extract entity metadata"
+   :args [:malli-schema]
+   :returns :ParsedSchema
+   :example (parse-schema [:map
+                           [:user/id :uuid]
+                           [:user/email :string]])}
+  
+  :parse-schemas
+  {:doc "Parse multiple Malli schemas and resolve relationships"
+   :args [:schemas-map]
+   :returns [:vector :ParsedSchema]
+   :example (parse-schemas {:User user-schema
+                            :Post post-schema})}}
+
+ :namespace ringline.schema.datomic
+ :functions
+ {:generate-schema
+  {:doc "Generate Datomic schema from parsed Malli schema"
+   :args [:ParsedSchema]
+   :returns :DatomicSchema
+   :example (generate-schema parsed-user-schema)}
+  
+  :generate-schemas
+  {:doc "Generate Datomic schemas for multiple entities"
+   :args [[:vector :ParsedSchema]]
+   :returns [:vector :DatomicSchema]
+   :example (generate-schemas [parsed-user parsed-post])}
+  
+  :schema->transaction
+  {:doc "Convert DatomicSchema to transaction data ready for transact"
+   :args [:DatomicSchema]
+   :returns [:vector :map]
+   :example (schema->transaction datomic-schema)}}
+
+ :namespace ringline.schema.lacinia
+ :functions
+ {:generate-schema
+  {:doc "Generate Lacinia GraphQL schema from parsed Malli schema"
+   :args [:ParsedSchema]
+   :returns :LaciniaSchema
+   :example (generate-schema parsed-user-schema)}
+  
+  :generate-schemas
+  {:doc "Generate complete Lacinia schema from multiple entities"
+   :args [[:vector :ParsedSchema]]
+   :returns :LaciniaSchema
+   :example (generate-schemas [parsed-user parsed-post])}
+  
+  :attach-resolvers
+  {:doc "Attach resolver functions to generated Lacinia schema"
+   :args [:LaciniaSchema :resolvers-map]
+   :returns :LaciniaSchema
+   :example (attach-resolvers lacinia-schema {:resolve-user user-resolver})}}
+
+ :namespace ringline.query.converter
+ :functions
+ {:graphql->pull
+  {:doc "Convert GraphQL field selections to Datomic pull pattern"
+   :args [:QueryContext]
+   :returns :PullPattern
+   :example (graphql->pull {:entity-type :User
+                            :selections [:id :email :posts]
+                            :nested-queries {:posts {:selections [:id :title]}}})}
+  
+  :build-query-context
+  {:doc "Build QueryContext from Lacinia resolver context"
+   :args [:lacinia-context :entity-type]
+   :returns :QueryContext
+   :example (build-query-context context :User)}
+  
+  :pull-with-args
+  {:doc "Generate pull pattern with datalog where clauses for filtering"
+   :args [:QueryContext]
+   :returns [:map {:pattern :vector :where-clauses :vector}]
+   :example (pull-with-args {:entity-type :User
+                             :selections [:id :email]
+                             :arguments {:email "user@example.com"}})}}
+
+ :namespace ringline.response.transformer
+ :functions
+ {:datomic->graphql
+  {:doc "Transform Datomic entity result to GraphQL-compatible format"
+   :args [:datomic-entity :ParsedSchema]
+   :returns :map
+   :example (datomic->graphql user-entity parsed-user-schema)}
+  
+  :entities->graphql
+  {:doc "Transform multiple Datomic entities to GraphQL format"
+   :args [[:vector :datomic-entity] :ParsedSchema]
+   :returns [:vector :map]
+   :example (entities->graphql user-entities parsed-user-schema)}
+  
+  :transform-with-selections
+  {:doc "Transform entity including only requested GraphQL selections"
+   :args [:datomic-entity :QueryContext]
+   :returns :map
+   :example (transform-with-selections user-entity query-context)}}
+
+ :namespace ringline.core
+ :functions
+ {:init-framework
+  {:doc "Initialize framework with Malli schemas, returns both Datomic and Lacinia schemas"
+   :args [:schemas-map :options-map]
+   :returns [:map {:datomic [:vector :map]
+                   :lacinia :map
+                   :parsed [:vector :ParsedSchema]}]
+   :example (init-framework {:User user-schema :Post post-schema}
+                            {:datomic-ns-prefix "app"
+                             :graphql-naming :camelCase})}
+  
+  :create-resolver
+  {:doc "Create a Lacinia resolver function that uses Datomic pull"
+   :args [:entity-type :datomic-conn :ParsedSchema]
+   :returns :function
+   :example (create-resolver :User db-conn parsed-user-schema)}}}
+
+;; Type Definitions (for reference)
+{:types
+ {:ParsedSchema {:schema-name :keyword
+                 :fields [:vector :FieldDefinition]
+                 :properties :map
+                 :relationships [:vector :Relationship]}
+  
+  :FieldDefinition {:name :keyword
+                    :type :keyword
+                    :required :boolean
+                    :cardinality :keyword
+                    :enum-values [:maybe [:vector :any]]
+                    :properties [:maybe :map]}
+  
+  :Relationship {:field :keyword
+                 :source :keyword
+                 :target :keyword
+                 :cardinality :keyword
+                 :bidirectional :boolean}
+  
+  :DatomicSchema {:source-entity :keyword
+                  :attributes [:vector :map]}
+  
+  :LaciniaSchema {:objects :map
+                  :queries :map
+                  :enums [:maybe :map]}
+  
+  :QueryContext {:entity-type :keyword
+                 :selections :vector
+                 :arguments :map
+                 :nested-queries :map}
+  
+  :PullPattern {:pattern :vector
+                :entity-id [:maybe :any]
+                :where-clauses [:maybe :vector]}}}
+
