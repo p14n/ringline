@@ -80,21 +80,21 @@
 
 ### Tests for User Story 2 (TDD - Write FIRST, ensure FAIL)
 
-- [ ] T019 [P] [US2] Contract test for generate-schema function in test/ringline/schema/datomic_test.clj
-- [ ] T020 [P] [US2] Contract test for generate-schemas function in test/ringline/schema/datomic_test.clj
-- [ ] T021 [P] [US2] Contract test for schema->transaction function in test/ringline/schema/datomic_test.clj
-- [ ] T022 [P] [US2] Integration test for end-to-end Datomic schema generation in test/ringline/integration/schema_generation_test.clj
+- [x] T019 [P] [US2] Contract test for generate-schema function in test/ringline/schema/datomic_test.clj
+- [x] T020 [P] [US2] Contract test for generate-schemas function in test/ringline/schema/datomic_test.clj
+- [x] T021 [P] [US2] Contract test for schema->transaction function in test/ringline/schema/datomic_test.clj
+- [x] T022 [P] [US2] Integration test for end-to-end Datomic schema generation in test/ringline/integration/schema_generation_test.clj
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Implement Malli to Datomic type mapping in src/ringline/schema/datomic.clj (use types.clj mappings)
-- [ ] T024 [US2] Implement cardinality detection in src/ringline/schema/datomic.clj (:one vs :many from Malli structure)
-- [ ] T025 [US2] Implement namespace application in src/ringline/schema/datomic.clj (use :ringline/datomic-ns property)
-- [ ] T026 [US2] Implement generate-schema function in src/ringline/schema/datomic.clj (ParsedSchema → DatomicSchema)
-- [ ] T027 [US2] Implement generate-schemas function in src/ringline/schema/datomic.clj (handle multiple entities)
-- [ ] T028 [US2] Implement schema->transaction function in src/ringline/schema/datomic.clj (DatomicSchema → transaction data)
-- [ ] T029 [US2] Add Malli validation for DatomicSchema output in src/ringline/schema/datomic.clj
-- [ ] T030 [US2] Verify all tests pass for User Story 2
+- [x] T023 [US2] Implement Malli to Datomic type mapping in src/ringline/schema/datomic.clj (use types.clj mappings)
+- [x] T024 [US2] Implement cardinality detection in src/ringline/schema/datomic.clj (:one vs :many from Malli structure)
+- [x] T025 [US2] Implement namespace application in src/ringline/schema/datomic.clj (use :ringline/datomic-ns property)
+- [x] T026 [US2] Implement generate-schema function in src/ringline/schema/datomic.clj (ParsedSchema → DatomicSchema)
+- [x] T027 [US2] Implement generate-schemas function in src/ringline/schema/datomic.clj (handle multiple entities)
+- [x] T028 [US2] Implement schema->transaction function in src/ringline/schema/datomic.clj (DatomicSchema → transaction data)
+- [x] T029 [US2] Add Malli validation for DatomicSchema output in src/ringline/schema/datomic.clj
+- [x] T030 [US2] Verify all tests pass for User Story 2
 
 **Checkpoint**: At this point, User Stories 1 AND 2 work independently - can generate Datomic schemas from Malli
 
@@ -108,24 +108,24 @@
 
 ### Tests for User Story 3 (TDD - Write FIRST, ensure FAIL)
 
-- [ ] T031 [P] [US3] Contract test for generate-schema function in test/ringline/schema/lacinia_test.clj
-- [ ] T032 [P] [US3] Contract test for generate-schemas function in test/ringline/schema/lacinia_test.clj
-- [ ] T033 [P] [US3] Contract test for attach-resolvers function in test/ringline/schema/lacinia_test.clj
-- [ ] T034 [P] [US3] Integration test for end-to-end Lacinia schema generation in test/ringline/integration/schema_generation_test.clj
+- [x] T031 [P] [US3] Contract test for generate-schema function in test/ringline/schema/lacinia_test.clj
+- [x] T032 [P] [US3] Contract test for generate-schemas function in test/ringline/schema/lacinia_test.clj
+- [x] T033 [P] [US3] Contract test for attach-resolvers function in test/ringline/schema/lacinia_test.clj
+- [x] T034 [P] [US3] Integration test for end-to-end Lacinia schema generation in test/ringline/integration/schema_generation_test.clj
 
 ### Implementation for User Story 3
 
-- [ ] T035 [US3] Implement Malli to GraphQL type mapping in src/ringline/schema/lacinia.clj (use types.clj mappings)
-- [ ] T036 [US3] Implement GraphQL object type generation in src/ringline/schema/lacinia.clj (create :objects map)
-- [ ] T037 [US3] Implement query root detection in src/ringline/schema/lacinia.clj (use :ringline/query-root property)
-- [ ] T038 [US3] Implement searchable parameter detection in src/ringline/schema/lacinia.clj (use :ringline/searchable property)
-- [ ] T039 [US3] Implement query argument generation in src/ringline/schema/lacinia.clj (create :args for searchable fields)
-- [ ] T040 [US3] Implement relationship field generation in src/ringline/schema/lacinia.clj (GraphQL object references)
-- [ ] T041 [US3] Implement generate-schema function in src/ringline/schema/lacinia.clj (ParsedSchema → LaciniaSchema)
-- [ ] T042 [US3] Implement generate-schemas function in src/ringline/schema/lacinia.clj (merge multiple entities into single schema)
-- [ ] T043 [US3] Implement attach-resolvers function in src/ringline/schema/lacinia.clj (attach resolver functions to schema)
-- [ ] T044 [US3] Add Malli validation for LaciniaSchema output in src/ringline/schema/lacinia.clj
-- [ ] T045 [US3] Verify all tests pass for User Story 3
+- [x] T035 [US3] Implement Malli to GraphQL type mapping in src/ringline/schema/lacinia.clj (use types.clj mappings)
+- [x] T036 [US3] Implement GraphQL object type generation in src/ringline/schema/lacinia.clj (create :objects map)
+- [x] T037 [US3] Implement query root detection in src/ringline/schema/lacinia.clj (use :ringline/query-root property)
+- [x] T038 [US3] Implement searchable parameter detection in src/ringline/schema/lacinia.clj (use :ringline/searchable property)
+- [x] T039 [US3] Implement query argument generation in src/ringline/schema/lacinia.clj (create :args for searchable fields)
+- [x] T040 [US3] Implement relationship field generation in src/ringline/schema/lacinia.clj (GraphQL object references)
+- [x] T041 [US3] Implement generate-schema function in src/ringline/schema/lacinia.clj (ParsedSchema → LaciniaSchema)
+- [x] T042 [US3] Implement generate-schemas function in src/ringline/schema/lacinia.clj (merge multiple entities into single schema)
+- [x] T043 [US3] Implement attach-resolvers function in src/ringline/schema/lacinia.clj (attach resolver functions to schema)
+- [x] T044 [US3] Add Malli validation for LaciniaSchema output in src/ringline/schema/lacinia.clj
+- [x] T045 [US3] Verify all tests pass for User Story 3
 
 **Checkpoint**: At this point, User Stories 1, 2, AND 3 work independently - can generate both Datomic and Lacinia schemas
 
