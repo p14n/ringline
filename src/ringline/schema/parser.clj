@@ -1,0 +1,181 @@
+(ns ringline.schema.parser
+  "Parse Malli schemas and extract entity metadata"
+  (:require [malli.core :as m]
+            [ringline.schema.types :as types]
+            [ringline.schema.properties :as props]))
+
+;; Malli schemas for validation
+
+(def FieldDefinition
+  "Schema for a field definition"
+  [:map
+   [:name :keyword]
+   [:type :keyword]
+   [:required :boolean]
+   [:cardinality [:enum :one :many]]
+   [:enum-values [:maybe [:vector :any]]]
+   [:properties [:maybe :map]]])
+
+(def Relationship
+  "Schema for a relationship definition"
+  [:map
+   [:field :keyword]
+   [:source :keyword]
+   [:target [:maybe :keyword]]
+   [:cardinality [:enum :one :many]]
+   [:bidirectional :boolean]])
+
+(def ParsedSchema
+  "Schema for a parsed Malli schema"
+  [:map
+   [:schema-name :keyword]
+   [:fields [:vector FieldDefinition]]
+   [:properties :map]
+   [:relationships [:vector Relationship]]])
+
+;; Field extraction
+
+(defn- extract-field-type
+  "Extract the Malli type from a field schema"
+  [field-schema]
+  (let [field-type (m/type field-schema)]
+    (cond
+      (= :vector field-type) :vector
+      (= :sequential field-type) :sequential
+      (= :set field-type) :set
+      (= :enum field-type) :enum
+      (= :map field-type) :map
+      :else field-type)))
+
+(defn- extract-cardinality
+  "Determine cardinality (:one or :many) from field type"
+  [field-type field-schema]
+  (if (types/collection-type? field-type)
+    :many
+    :one))
+
+(defn- extract-enum-values
+  "Extract enum values if field is an enum type"
+  [field-schema]
+  (when (= :enum (m/type field-schema))
+    (vec (m/children field-schema))))
+
+(defn- extract-ref-type
+  "Extract the actual type from a ref field (handles vectors of refs)"
+  [field-schema]
+  (let [field-type (m/type field-schema)]
+    (if (types/collection-type? field-type)
+      ;; For [:vector :ref], get the inner type
+      (let [children (m/children field-schema)]
+        (when (seq children)
+          (first children)))
+      ;; For direct :ref
+      field-type)))
+
+(defn- parse-field
+  "Parse a single field from Malli schema children"
+  [[field-name field-schema]]
+  (let [field-type (extract-field-type field-schema)
+        actual-type (if (types/collection-type? field-type)
+                      (extract-ref-type field-schema)
+                      field-type)
+        cardinality (extract-cardinality field-type field-schema)
+        field-props (m/properties field-schema)]
+    {:name field-name
+     :type actual-type
+     :required true  ; Malli maps are required by default
+     :cardinality cardinality
+     :enum-values (extract-enum-values field-schema)
+     :properties field-props}))
+
+;; Property extraction
+
+(defn- extract-properties
+  "Extract custom properties from Malli schema"
+  [schema]
+  (or (m/properties schema) {}))
+
+;; Relationship detection
+
+(defn- field->relationship
+  "Convert a ref field to a relationship definition"
+  [field schema-name]
+  (when (= :ref (:type field))
+    {:field (:name field)
+     :source schema-name
+     :target nil  ; Will be resolved in parse-schemas
+     :cardinality (:cardinality field)
+     :bidirectional false}))
+
+(defn- extract-relationships
+  "Extract all relationships from parsed fields"
+  [fields schema-name]
+  (->> fields
+       (map #(field->relationship % schema-name))
+       (filter some?)
+       vec))
+
+;; Main parsing functions
+
+(defn parse-schema
+  "Parse a Malli schema and extract entity metadata.
+
+   Args:
+     schema-name - Keyword name for the entity (e.g., :User, :Post)
+     malli-schema - Malli schema definition
+
+   Returns:
+     ParsedSchema map with :schema-name, :fields, :properties, :relationships"
+  [schema-name malli-schema]
+  (let [properties (extract-properties malli-schema)
+        children (m/children malli-schema)
+        fields (mapv parse-field children)
+        relationships (extract-relationships fields schema-name)
+        result {:schema-name schema-name
+                :fields fields
+                :properties properties
+                :relationships relationships}]
+    ;; Validate the result
+    (when-not (m/validate ParsedSchema result)
+      (throw (ex-info "Invalid ParsedSchema"
+                      {:schema-name schema-name
+                       :errors (m/explain ParsedSchema result)})))
+    result))
+
+(defn- resolve-relationship-target
+  "Resolve the target entity for a relationship based on field name"
+  [relationship schema-names]
+  (let [field-name (name (:field relationship))
+        ;; Try to match field name to schema name (e.g., :posts -> :post)
+        potential-targets (filter #(or (= field-name (name %))
+                                       (= field-name (str (name %) "s"))
+                                       (= (str field-name "s") (name %)))
+                                  schema-names)]
+    (if (seq potential-targets)
+      (assoc relationship :target (first potential-targets))
+      relationship)))
+
+(defn- resolve-relationships
+  "Resolve relationship targets across all parsed schemas"
+  [parsed-schemas]
+  (let [schema-names (map :schema-name parsed-schemas)]
+    (mapv (fn [schema]
+            (update schema :relationships
+                    (fn [rels]
+                      (mapv #(resolve-relationship-target % schema-names) rels))))
+          parsed-schemas)))
+
+(defn parse-schemas
+  "Parse multiple Malli schemas and resolve relationships.
+   
+   Args:
+     schemas-map - Map of schema-name to malli-schema (e.g., {:User user-schema :Post post-schema})
+   
+   Returns:
+     Vector of ParsedSchema maps with resolved relationships"
+  [schemas-map]
+  (let [parsed (mapv (fn [[schema-name malli-schema]]
+                       (parse-schema schema-name malli-schema))
+                     schemas-map)]
+    (resolve-relationships parsed)))
+

@@ -54,19 +54,19 @@
 
 ### Tests for User Story 1 (TDD - Write FIRST, ensure FAIL)
 
-- [ ] T009 [P] [US1] Contract test for parse-schema function in test/ringline/schema/parser_test.clj
-- [ ] T010 [P] [US1] Contract test for parse-schemas function in test/ringline/schema/parser_test.clj
-- [ ] T011 [P] [US1] Integration test for multi-entity parsing with relationships in test/ringline/integration/schema_parsing_test.clj
+- [x] T009 [P] [US1] Contract test for parse-schema function in test/ringline/schema/parser_test.clj
+- [x] T010 [P] [US1] Contract test for parse-schemas function in test/ringline/schema/parser_test.clj
+- [x] T011 [P] [US1] Integration test for multi-entity parsing with relationships in test/ringline/integration/schema_parsing_test.clj
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Implement parse-schema function in src/ringline/schema/parser.clj (extract fields, types, properties)
-- [ ] T013 [US1] Implement field extraction logic in src/ringline/schema/parser.clj (handle Malli m/children)
-- [ ] T014 [US1] Implement property extraction logic in src/ringline/schema/parser.clj (handle Malli m/properties)
-- [ ] T015 [US1] Implement relationship detection in src/ringline/schema/parser.clj (identify :ref types, cardinality)
-- [ ] T016 [US1] Implement parse-schemas function in src/ringline/schema/parser.clj (handle multiple entities, resolve relationships)
-- [ ] T017 [US1] Add Malli validation for ParsedSchema output in src/ringline/schema/parser.clj
-- [ ] T018 [US1] Verify all tests pass for User Story 1
+- [x] T012 [US1] Implement parse-schema function in src/ringline/schema/parser.clj (extract fields, types, properties)
+- [x] T013 [US1] Implement field extraction logic in src/ringline/schema/parser.clj (handle Malli m/children)
+- [x] T014 [US1] Implement property extraction logic in src/ringline/schema/parser.clj (handle Malli m/properties)
+- [x] T015 [US1] Implement relationship detection in src/ringline/schema/parser.clj (identify :ref types, cardinality)
+- [x] T016 [US1] Implement parse-schemas function in src/ringline/schema/parser.clj (handle multiple entities, resolve relationships)
+- [x] T017 [US1] Add Malli validation for ParsedSchema output in src/ringline/schema/parser.clj
+- [x] T018 [US1] Verify all tests pass for User Story 1
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - can parse Malli schemas and extract all metadata
 
