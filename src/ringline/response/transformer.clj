@@ -126,6 +126,10 @@
     (instance? java.util.UUID value)
     (str value)
 
+    ;; Vector of keywords (enum array) - convert each to string
+    (and (vector? value) (every? keyword? value))
+    (mapv name value)
+
     ;; Keyword (enum) - convert to string
     ;; Enums are mapped to String type in GraphQL, not custom scalars
     (keyword? value)

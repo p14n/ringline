@@ -5,19 +5,15 @@
    - Malli schemas as single source of truth
    - Automatic Datomic schema generation
    - Automatic GraphQL schema generation
+   - Automatic query resolvers via :ringline/query-root
    - Enum support (Episode)
    - Multiple entity types (Human, Droid)
-   - Reference relationships (friends)
-   - Custom query resolvers
    - Datomic in-memory database"
   (:require [ringline.core :as ringline]
             [ringline.schema.datomic :as ringline-datomic]
-            [ringline.schema.parser :as parser]
-            [ringline.response.transformer :as transformer]
             [starwars.schema :as schema]
             [com.walmartlabs.lacinia :as lacinia]
             [com.walmartlabs.lacinia.schema :as lacinia-schema]
-            [com.walmartlabs.lacinia.resolve :as resolve]
             [datomic.api :as d]
             [clojure.pprint :as pprint]))
 
@@ -97,55 +93,10 @@
   (d/release conn)
   (d/delete-database db-uri))
 
-;; Custom resolvers for Star Wars queries
-
-(defn resolve-hero
-  "Resolve the hero query - returns R2-D2 for EMPIRE, Luke for others"
-  [context args value]
-  (let [conn (get context :conn)
-        db (d/db conn)
-        episode (:episode args)
-        ;; R2-D2 is the hero of EMPIRE, Luke is the hero of other episodes
-        hero-id (if (= episode :EMPIRE) "2000" "1000")
-        ;; Try to find in droids first, then humans
-        droid-result (d/q '[:find (pull ?e [*]) .
-                            :in $ ?id
-                            :where [?e :droid/id ?id]]
-                          db hero-id)
-        human-result (when-not droid-result
-                       (d/q '[:find (pull ?e [*]) .
-                              :in $ ?id
-                              :where [?e :human/id ?id]]
-                            db hero-id))]
-    (or droid-result human-result)))
-
-(defn resolve-human
-  "Resolve the human query by ID"
-  [context args value]
-  (let [conn (get context :conn)
-        db (d/db conn)
-        id (:id args)
-        parsed-schema (parser/parse-schema :human schema/human-schema)
-        result (d/q '[:find (pull ?e [*]) .
-                      :in $ ?id
-                      :where [?e :human/id ?id]]
-                    db id)]
-    (when result
-      (transformer/datomic->graphql result parsed-schema))))
-
-(defn resolve-droid
-  "Resolve the droid query by ID"
-  [context args value]
-  (let [conn (get context :conn)
-        db (d/db conn)
-        id (:id args)
-        parsed-schema (parser/parse-schema :droid schema/droid-schema)
-        result (d/q '[:find (pull ?e [*]) .
-                      :in $ ?id
-                      :where [?e :droid/id ?id]]
-                    db id)]
-    (when result
-      (transformer/datomic->graphql result parsed-schema))))
+;; Note: We don't need custom resolvers for human and droid queries!
+;; Ringline's automatic resolvers (via :ringline/query-root true) handle these.
+;; We only need custom resolvers for queries that Ringline doesn't support,
+;; like the hero query which requires a Character interface/union.
 
 ;; Create the complete GraphQL schema with resolvers
 (defn create-schema
@@ -163,16 +114,18 @@
         ;; but Ringline doesn't support interfaces yet. For this example, we'll
         ;; skip the hero query and focus on the human and droid queries.
 
-        ;; Update human and droid queries with proper args and defaults
+        ;; Attach Ringline's automatic resolvers for human and droid queries
+        ;; These are generated automatically because of :ringline/query-root true
+        human-resolver (ringline/create-resolver :human conn)
+        droid-resolver (ringline/create-resolver :droid conn)
+
         schema-with-resolvers (-> schema-with-enum
-                                  (assoc-in [:queries :human :type] '(non-null :Human))
-                                  (assoc-in [:queries :human :resolve] resolve-human)
-                                  (assoc-in [:queries :human :args] {:id {:type 'String
-                                                                           :default-value "1001"}})
-                                  (assoc-in [:queries :droid :type] :Droid)
-                                  (assoc-in [:queries :droid :resolve] resolve-droid)
-                                  (assoc-in [:queries :droid :args] {:id {:type 'String
-                                                                           :default-value "2001"}}))]
+                                  ;; Attach resolvers
+                                  (assoc-in [:queries :human :resolve] human-resolver)
+                                  (assoc-in [:queries :droid :resolve] droid-resolver)
+                                  ;; Add default values for query arguments
+                                  (assoc-in [:queries :human :args :id :default-value] "1001")
+                                  (assoc-in [:queries :droid :args :id :default-value] "2001"))]
     ;; Compile the schema
     (lacinia-schema/compile schema-with-resolvers)))
 
