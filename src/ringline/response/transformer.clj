@@ -23,6 +23,18 @@
   [entity-ns field-name]
   (keyword entity-ns (name field-name)))
 
+;; Forward declaration for mutual recursion
+(declare transform-field-value)
+
+(defn- transform-entity
+  "Transform a single Datomic entity to GraphQL format"
+  [datomic-entity parsed-schema]
+  (into {}
+        (map (fn [[k v]]
+               [(namespaced-keyword->simple k)
+                (transform-field-value v parsed-schema)])
+             datomic-entity)))
+
 (defn- transform-field-value
   "Transform a field value, handling nested entities"
   [value parsed-schema]
@@ -30,22 +42,13 @@
     ;; Vector of entities (many relationship)
     (and (vector? value) (every? map? value))
     (mapv #(transform-entity % parsed-schema) value)
-    
+
     ;; Single entity (one relationship)
     (and (map? value) (some namespace (keys value)))
     (transform-entity value parsed-schema)
-    
+
     ;; Primitive value
     :else value))
-
-(defn- transform-entity
-  "Transform a single Datomic entity to GraphQL format"
-  [datomic-entity parsed-schema]
-  (into {}
-        (map (fn [[k v]]
-               [(namespaced-keyword->simple k) 
-                (transform-field-value v parsed-schema)])
-             datomic-entity)))
 
 ;; Main transformation functions
 

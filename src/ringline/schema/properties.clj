@@ -21,11 +21,20 @@
 
 (def searchable
   "Property key for marking fields as searchable in GraphQL queries.
-   
+
    Example: {:ringline/searchable [:email :username]}
-   
+
    This will generate GraphQL query arguments for searching by these fields."
   :ringline/searchable)
+
+(def ref-to
+  "Property key for marking a field as a reference to another entity.
+
+   Example: [:author :uuid {:ringline/ref-to :user}]
+
+   This marks the field as a relationship and will generate appropriate Datomic :db.type/ref
+   and GraphQL object type references."
+  :ringline/ref-to)
 
 ;; Helper functions for property access
 
@@ -43,4 +52,9 @@
   "Extract searchable fields from schema properties"
   [properties]
   (get properties searchable []))
+
+(defn get-ref-target
+  "Extract the reference target entity from field properties"
+  [properties]
+  (get properties ref-to))
 

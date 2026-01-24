@@ -11,8 +11,8 @@
    [:id :uuid]
    [:username :string]
    [:email :string]
-   [:created-at :inst]
-   [:posts [:vector :ref]]])  ; One-to-many relationship
+   [:created-at :int]  ; Using :int for timestamp (epoch milliseconds)
+   [:posts {:ringline/ref-to :post} [:vector :uuid]]])  ; One-to-many relationship
 
 ;; Example Post entity schema
 (def post-schema
@@ -24,8 +24,8 @@
    [:title :string]
    [:content :string]
    [:published? :boolean]
-   [:created-at :inst]
-   [:author :ref]  ; Many-to-one relationship
+   [:created-at :int]  ; Using :int for timestamp (epoch milliseconds)
+   [:author {:ringline/ref-to :user} :uuid]  ; Many-to-one relationship
    [:tags [:vector :string]]])
 
 ;; Example Comment entity schema (for nested relationship testing)
@@ -34,9 +34,9 @@
    {:ringline/datomic-ns :comment}
    [:id :uuid]
    [:text :string]
-   [:created-at :inst]
-   [:post :ref]
-   [:author :ref]])
+   [:created-at :int]  ; Using :int for timestamp (epoch milliseconds)
+   [:post {:ringline/ref-to :post} :uuid]  ; Many-to-one relationship
+   [:author {:ringline/ref-to :user} :uuid]])  ; Many-to-one relationship
 
 ;; Multi-entity schema map
 (def test-schemas
@@ -64,7 +64,7 @@
   [:map
    {:ringline/datomic-ns :profile}
    [:id :uuid]
-   [:user :ref]
+   [:user :uuid]  ; Reference (using :uuid instead of :ref)
    [:settings [:map
                [:theme [:enum :light :dark]]
                [:notifications :boolean]

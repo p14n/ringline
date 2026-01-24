@@ -9,16 +9,16 @@
   "Schema for query context extracted from Lacinia"
   [:map
    [:entity-type :keyword]
-   [:selections :vector]
+   [:selections [:vector :any]]
    [:arguments :map]
    [:nested-queries :map]])
 
 (def PullPattern
   "Schema for Datomic pull pattern"
   [:map
-   [:pattern :vector]
+   [:pattern [:vector :any]]
    [:entity-id {:optional true} :any]
-   [:where-clauses {:optional true} :vector]])
+   [:where-clauses {:optional true} [:vector :any]]])
 
 ;; Helper functions
 

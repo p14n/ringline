@@ -122,16 +122,16 @@
 
 (defn generate-schemas
   "Generate complete Lacinia GraphQL schema from multiple parsed entities.
-   
+
    Args:
      parsed-schemas - Vector of ParsedSchema maps
-   
+
    Returns:
      Single LaciniaSchema map with all objects and queries merged"
   [parsed-schemas]
   (let [individual-schemas (map generate-schema parsed-schemas)
-        merged {:objects (apply merge (map :objects individual-schemas))
-                :queries (apply merge (map :queries individual-schemas))}]
+        merged {:objects (apply merge {} (map :objects individual-schemas))
+                :queries (apply merge {} (map :queries individual-schemas))}]
     ;; Validate the result
     (when-not (m/validate LaciniaSchema merged)
       (throw (ex-info "Invalid merged LaciniaSchema"

@@ -36,16 +36,9 @@
 ;; Field extraction
 
 (defn- extract-field-type
-  "Extract the Malli type from a field schema"
+  "Extract the Malli type from a field schema (expects Malli schema object)"
   [field-schema]
-  (let [field-type (m/type field-schema)]
-    (cond
-      (= :vector field-type) :vector
-      (= :sequential field-type) :sequential
-      (= :set field-type) :set
-      (= :enum field-type) :enum
-      (= :map field-type) :map
-      :else field-type)))
+  (m/type field-schema))
 
 (defn- extract-cardinality
   "Determine cardinality (:one or :many) from field type"
@@ -65,27 +58,32 @@
   [field-schema]
   (let [field-type (m/type field-schema)]
     (if (types/collection-type? field-type)
-      ;; For [:vector :ref], get the inner type
+      ;; For [:vector :uuid], get the inner type
+      ;; Note: m/children returns Malli schema objects, not raw keywords
       (let [children (m/children field-schema)]
         (when (seq children)
-          (first children)))
-      ;; For direct :ref
+          (m/type (first children))))
+      ;; For direct types
       field-type)))
 
 (defn- parse-field
   "Parse a single field from Malli schema children"
-  [[field-name field-schema]]
-  (let [field-type (extract-field-type field-schema)
+  [[field-name field-properties field-schema]]
+  ;; Convert raw vector/keyword to Malli schema object if needed
+  (let [schema-obj (if (or (vector? field-schema) (keyword? field-schema))
+                     (m/schema field-schema)
+                     field-schema)
+        field-type (extract-field-type schema-obj)
         actual-type (if (types/collection-type? field-type)
-                      (extract-ref-type field-schema)
+                      (extract-ref-type schema-obj)
                       field-type)
-        cardinality (extract-cardinality field-type field-schema)
-        field-props (m/properties field-schema)]
+        cardinality (extract-cardinality field-type schema-obj)
+        field-props (or field-properties (m/properties schema-obj))]
     {:name field-name
      :type actual-type
-     :required true  ; Malli maps are required by default
+     :required (not (:optional field-props))  ; Check if field is optional
      :cardinality cardinality
-     :enum-values (extract-enum-values field-schema)
+     :enum-values (extract-enum-values schema-obj)
      :properties field-props}))
 
 ;; Property extraction
@@ -98,12 +96,13 @@
 ;; Relationship detection
 
 (defn- field->relationship
-  "Convert a ref field to a relationship definition"
+  "Convert a ref field to a relationship definition.
+   A field is considered a relationship if it has the :ringline/ref-to property."
   [field schema-name]
-  (when (= :ref (:type field))
+  (when-let [ref-target (props/get-ref-target (:properties field))]
     {:field (:name field)
      :source schema-name
-     :target nil  ; Will be resolved in parse-schemas
+     :target ref-target  ; Target entity from :ringline/ref-to property
      :cardinality (:cardinality field)
      :bidirectional false}))
 

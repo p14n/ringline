@@ -64,7 +64,7 @@
               id-field (first (filter #(= :id (:name %)) user-fields))
               posts-field (first (filter #(= :posts (:name %)) user-fields))]
           (is (= :uuid (:type id-field)) "ID field has UUID type")
-          (is (= :ref (:type posts-field)) "Posts field has ref type")
+          (is (= :uuid (:type posts-field)) "Posts field has uuid type (ref marked by property)")
           (is (= :many (:cardinality posts-field)) "Posts field has many cardinality"))))))
 
 (deftest nested-relationship-resolution-test
@@ -94,8 +94,8 @@
       (is (= :simple (:schema-name simple)))
       (is (empty? (:relationships simple)) "No relationships")
       (is (seq (:fields simple)) "Has fields")
-      (is (every? #(not= :ref (:type %)) (:fields simple))
-          "No ref type fields"))))
+      (is (every? #(nil? (get-in % [:properties :ringline/ref-to])) (:fields simple))
+          "No reference fields (no :ringline/ref-to property)"))))
 
 (deftest end-to-end-datomic-schema-generation-test
   (testing "Complete workflow: Malli -> ParsedSchema -> DatomicSchema -> Transaction"

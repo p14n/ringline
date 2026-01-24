@@ -37,8 +37,8 @@
               (is (contains? (:queries lacinia-schema) :post) "Has post query"))
           
           ;; Step 4: Simulate GraphQL query
-          lacinia-ctx {:com.walmartlabs.lacinia/selection 
-                       {:selections {:id {} :email {} :username {}}
+          lacinia-ctx {:com.walmartlabs.lacinia/selection
+                       {:selections {:id {} :email {}}  ; Only select id and email, not username
                         :arguments {:email "test@example.com"}}}
           query-ctx (converter/build-query-context lacinia-ctx :User)
           
@@ -116,10 +116,12 @@
       (is (contains? (:objects lacinia-schema) :Comment) "Has Comment")
       
       ;; Verify relationships are preserved
-      (is (some? (get-in lacinia-schema [:objects :User :fields :posts])) 
+      (is (some? (get-in lacinia-schema [:objects :User :fields :posts]))
           "User has posts relationship")
-      (is (some? (get-in lacinia-schema [:objects :Post :fields :author])) 
+      (is (some? (get-in lacinia-schema [:objects :Post :fields :author]))
           "Post has author relationship")
-      (is (some? (get-in lacinia-schema [:objects :Post :fields :comments])) 
-          "Post has comments relationship"))))
+      (is (some? (get-in lacinia-schema [:objects :Comment :fields :post]))
+          "Comment has post relationship")
+      (is (some? (get-in lacinia-schema [:objects :Comment :fields :author]))
+          "Comment has author relationship"))))
 

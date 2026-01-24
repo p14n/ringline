@@ -23,9 +23,12 @@
 ;; Type and cardinality mapping
 
 (defn- field->datomic-type
-  "Convert a field's Malli type to Datomic valueType"
+  "Convert a field's Malli type to Datomic valueType.
+   If the field has :ringline/ref-to property, it's a reference type."
   [field]
-  (types/malli-type->datomic-type (:type field)))
+  (if (props/get-ref-target (:properties field))
+    :db.type/ref
+    (types/malli-type->datomic-type (:type field))))
 
 (defn- field->datomic-cardinality
   "Convert a field's cardinality to Datomic cardinality keyword"
