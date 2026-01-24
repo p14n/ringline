@@ -78,7 +78,7 @@
                                conn)
 
         ;; Attach automatic query resolver
-        user-resolver (ringline/create-resolver :user conn (get parsed-schemas :user))
+        user-resolver (ringline/create-resolver :user conn)
         schema-with-all-resolvers (assoc-in schema-with-mutations
                                             [:queries :user :resolve]
                                             user-resolver)]

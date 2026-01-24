@@ -51,7 +51,7 @@
           ;; Parse mutations from schemas
           mutation-defs (into []
                               (comp (map (fn [[entity-name schema]]
-                                          (mutation-parser/parse-mutations entity-name schema)))
+                                           (mutation-parser/parse-mutations entity-name schema)))
                                     (filter #(seq (:operations %))))
                               schemas-map)
 
@@ -112,9 +112,9 @@
 
             ;; Build mutation input map
             mutation-input {:operation operation
-                           :entity-type (keyword (name entity-type))
-                           :entity-id entity-id
-                           :data input-data}
+                            :entity-type (keyword (name entity-type))
+                            :entity-id entity-id
+                            :data input-data}
 
             ;; Execute mutation
             result (mutation-executor/execute-mutation mutation-input schema datomic-conn)]
@@ -134,7 +134,7 @@
           ;; On error, return nil and attach errors to context
           ;; (Lacinia will handle error formatting)
           (throw (ex-info "Mutation failed"
-                         {:errors (:errors result)}))))
+                          {:errors (:errors result)}))))
 
       (catch Exception e
         ;; Re-throw to let Lacinia handle error formatting
@@ -160,8 +160,8 @@
 
    Example:
      (create-resolver :User db-conn parsed-user-schema)"
-  [entity-type datomic-conn parsed-schema]
-  (fn resolver [context args value]
+  [entity-type datomic-conn]
+  (fn resolver [context args _value]
     (try
       ;; Build query context from Lacinia, passing args explicitly
       (let [query-ctx (converter/build-query-context context entity-type args)
@@ -181,8 +181,8 @@
                 entities (if (seq where-clauses)
                            ;; Query with filtering
                            (let [query-result (d/q {:find ['?e]
-                                                     :where where-clauses}
-                                                    db)
+                                                    :where where-clauses}
+                                                   db)
                                  entity-ids (map first query-result)]
                              (mapv #(d/pull db pattern %) entity-ids))
                            ;; No filtering - return empty for now
@@ -230,15 +230,15 @@
              ;; e.g., :createUser -> entity-type=:user, operation=:create
              (let [name-str (name mutation-name)
                    operation (cond
-                              (.startsWith name-str "create") :create
-                              (.startsWith name-str "update") :update
-                              (.startsWith name-str "delete") :delete
-                              :else nil)
+                               (.startsWith name-str "create") :create
+                               (.startsWith name-str "update") :update
+                               (.startsWith name-str "delete") :delete
+                               :else nil)
                    entity-name (cond
-                                (.startsWith name-str "create") (subs name-str 6)
-                                (.startsWith name-str "update") (subs name-str 6)
-                                (.startsWith name-str "delete") (subs name-str 6)
-                                :else nil)
+                                 (.startsWith name-str "create") (subs name-str 6)
+                                 (.startsWith name-str "update") (subs name-str 6)
+                                 (.startsWith name-str "delete") (subs name-str 6)
+                                 :else nil)
                    entity-key (when entity-name (keyword (clojure.string/lower-case entity-name)))
                    schema (get schemas-map entity-key)]
 
@@ -247,10 +247,10 @@
                  (assoc acc mutation-name
                         (assoc mutation-def
                                :resolve (create-mutation-resolver
-                                        entity-key
-                                        operation
-                                        datomic-conn
-                                        schema)))
+                                         entity-key
+                                         operation
+                                         datomic-conn
+                                         schema)))
                  ;; No schema found, keep mutation as-is
                  (assoc acc mutation-name mutation-def))))
            {}
@@ -362,6 +362,5 @@
 
   ;; Use resolver in Lacinia
   ;; (create-user-resolver context {:input {:username "alice" :email "alice@example.com"}} nil)
-
   )
 

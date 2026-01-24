@@ -65,17 +65,15 @@
   (testing "create-resolver returns a function"
     (let [schemas {:user fixtures/user-schema}
           framework (core/init-framework schemas {})
-          parsed-user (first (:parsed framework))
           mock-conn {:db-after nil}  ; Mock Datomic connection
-          resolver (core/create-resolver :User mock-conn parsed-user)]
+          resolver (core/create-resolver :User mock-conn)]
       (is (fn? resolver) "Returns a function")))
 
   (testing "create-resolver function accepts Lacinia context and args"
     (let [schemas {:user fixtures/user-schema}
           framework (core/init-framework schemas {})
-          parsed-user (first (:parsed framework))
           mock-conn {:db-after nil}
-          resolver (core/create-resolver :User mock-conn parsed-user)]
+          resolver (core/create-resolver :User mock-conn)]
       ;; Resolver should be callable with (context, args, value)
       (is (fn? resolver) "Resolver is a function")))
 
@@ -83,12 +81,9 @@
     (let [schemas {:user fixtures/user-schema
                    :post fixtures/post-schema}
           framework (core/init-framework schemas {})
-          parsed-schemas (:parsed framework)
-          parsed-user (first (filter #(= :user (:schema-name %)) parsed-schemas))
-          parsed-post (first (filter #(= :post (:schema-name %)) parsed-schemas))
           mock-conn {:db-after nil}
-          user-resolver (core/create-resolver :User mock-conn parsed-user)
-          post-resolver (core/create-resolver :Post mock-conn parsed-post)]
+          user-resolver (core/create-resolver :User mock-conn)
+          post-resolver (core/create-resolver :Post mock-conn)]
       (is (fn? user-resolver) "User resolver is a function")
       (is (fn? post-resolver) "Post resolver is a function")
       (is (not= user-resolver post-resolver) "Different resolvers for different entities")))
@@ -96,7 +91,6 @@
   (testing "create-resolver handles nil connection gracefully"
     (let [schemas {:user fixtures/user-schema}
           framework (core/init-framework schemas {})
-          parsed-user (first (:parsed framework))
-          resolver (core/create-resolver :User nil parsed-user)]
+          resolver (core/create-resolver :User nil)]
       (is (fn? resolver) "Returns a function even with nil connection"))))
 

@@ -10,67 +10,9 @@
    - Real Datomic in-memory database"
   (:require [clojure.test :refer [deftest testing is]]
             [starwars.core :as core]
-            [starwars.schema :as schema]
-            [ringline.core :as ringline]
-            [ringline.schema.datomic :as ringline-datomic]
-            [com.walmartlabs.lacinia.schema :as lacinia-schema]
             [datomic.api :as d]))
 
 (def test-db-uri "datomic:mem://user-example-test")
-
-(defn create-test-database!
-  "Create and initialize Datomic database with schema and sample data"
-  []
-  ;; Create database
-  (d/create-database test-db-uri)
-  (let [conn (d/connect test-db-uri)]
-
-    ;; Generate and install Datomic schema
-    (let [framework (ringline/init-framework schema/schemas {})
-          datomic-schemas (:datomic framework)
-          tx-data (mapcat ringline-datomic/schema->transaction datomic-schemas)]
-      @(d/transact conn tx-data))
-
-    ;; Add sample users
-    (let [sample-users [{:db/id (d/tempid :db.part/user)
-                         :user/id #uuid "00000000-0000-0000-0000-000000000001"
-                         :user/name "Alice Johnson"
-                         :user/email "alice@example.com"
-                         :user/age 30}
-                        {:db/id (d/tempid :db.part/user)
-                         :user/id #uuid "00000000-0000-0000-0000-000000000002"
-                         :user/name "Bob Smith"
-                         :user/email "bob@example.com"
-                         :user/age 25}
-                        {:db/id (d/tempid :db.part/user)
-                         :user/id #uuid "00000000-0000-0000-0000-000000000003"
-                         :user/name "Charlie Brown"
-                         :user/email "charlie@example.com"
-                         :user/age 35}]]
-      @(d/transact conn sample-users))
-
-    conn))
-
-(defn create-test-schema
-  "Create the complete Lacinia schema with resolvers attached and compiled"
-  [conn]
-  (let [framework (ringline/init-framework schema/schemas {})
-        lacinia-schema (:lacinia framework)
-        parsed-schemas (:parsed framework)
-
-        ;; Attach mutation resolvers
-        schema-with-mutations (ringline/attach-mutation-resolvers
-                               lacinia-schema
-                               schema/schemas
-                               conn)
-
-        ;; Attach automatic query resolver
-        user-resolver (ringline/create-resolver :user conn (get parsed-schemas :user))
-        schema-with-all-resolvers (assoc-in schema-with-mutations
-                                            [:queries :user :resolve]
-                                            user-resolver)]
-    ;; Compile the schema
-    (lacinia-schema/compile schema-with-all-resolvers)))
 
 (defn cleanup-database!
   "Clean up the test database"
@@ -78,14 +20,15 @@
   (d/release conn)
   (d/delete-database test-db-uri))
 
-(deftest query-user-by-email-test
-  (testing "Query user by email returns correct user with all fields"
-    (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
-      (try
+(deftest example-test
+  (let [conn (core/create-database!)
+        schema (core/create-schema conn)]
+    (try
+
+      (testing "Query user by email returns correct user with all fields"
         (let [result (core/execute-query schema
-                                        "{ user(email: \"alice@example.com\") { id name email age } }"
-                                        conn)]
+                                         "{ user(email: \"alice@example.com\") { id name email age } }"
+                                         conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "00000000-0000-0000-0000-000000000001"
                  (get-in result [:data :user :id]))
@@ -98,18 +41,12 @@
               "Returns correct email")
           (is (= 30
                  (get-in result [:data :user :age]))
-              "Returns correct age"))
-        (finally
-          (cleanup-database! conn))))))
+              "Returns correct age")))
 
-(deftest query-user-by-name-test
-  (testing "Query user by name returns correct user with all fields"
-    (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
-      (try
+      (testing "Query user by name returns correct user with all fields"
         (let [result (core/execute-query schema
-                                        "{ user(name: \"Bob Smith\") { id name email age } }"
-                                        conn)]
+                                         "{ user(name: \"Bob Smith\") { id name email age } }"
+                                         conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "00000000-0000-0000-0000-000000000002"
                  (get-in result [:data :user :id]))
@@ -122,29 +59,41 @@
               "Returns correct email")
           (is (= 25
                  (get-in result [:data :user :age]))
-              "Returns correct age"))
-        (finally
-          (cleanup-database! conn))))))
+              "Returns correct age")))
 
-(deftest create-user-mutation-test
-  (testing "Create mutation creates new user with generated UUID"
-    (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
-      (try
+      (testing "Query user by name returns correct user with all fields"
         (let [result (core/execute-query schema
-                                        "mutation {
-                                          createUser(input: {
-                                            name: \"Diana Prince\"
-                                            email: \"diana@example.com\"
-                                            age: 28
-                                          }) {
-                                            id
-                                            name
-                                            email
-                                            age
-                                          }
-                                        }"
-                                        conn)]
+                                         "{ user(name: \"Bob Smith\") { id name email age } }"
+                                         conn)]
+          (is (nil? (:errors result)) "No errors in response")
+          (is (= "00000000-0000-0000-0000-000000000002"
+                 (get-in result [:data :user :id]))
+              "Returns correct user ID")
+          (is (= "Bob Smith"
+                 (get-in result [:data :user :name]))
+              "Returns correct name")
+          (is (= "bob@example.com"
+                 (get-in result [:data :user :email]))
+              "Returns correct email")
+          (is (= 25
+                 (get-in result [:data :user :age]))
+              "Returns correct age")))
+
+      (testing "Create mutation creates new user with generated UUID"
+        (let [result (core/execute-query schema
+                                         "mutation {
+                                                createUser(input: {
+                                                  name: \"Diana Prince\"
+                                                  email: \"diana@example.com\"
+                                                  age: 28
+                                                }) {
+                                                  id
+                                                  name
+                                                  email
+                                                  age
+                                                }
+                                              }"
+                                         conn)]
 
 
           (is (nil? (:errors result)) "No errors in response")
@@ -158,28 +107,22 @@
               "Returns correct email")
           (is (= 28
                  (get-in result [:data :createUser :age]))
-              "Returns correct age"))
-        (finally
-          (cleanup-database! conn))))))
+              "Returns correct age")))
 
-(deftest update-user-mutation-test
-  (testing "Update mutation updates user age and returns updated entity"
-    (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
-      (try
+      (testing "Update mutation updates user age and returns updated entity"
         (let [result (core/execute-query schema
-                                        "mutation {
-                                          updateUser(input: {
-                                            id: \"00000000-0000-0000-0000-000000000002\"
-                                            age: 26
-                                          }) {
-                                            id
-                                            name
-                                            email
-                                            age
-                                          }
-                                        }"
-                                        conn)]
+                                         "mutation {
+                                                updateUser(input: {
+                                                  id: \"00000000-0000-0000-0000-000000000002\"
+                                                  age: 26
+                                                }) {
+                                                  id
+                                                  name
+                                                  email
+                                                  age
+                                                }
+                                              }"
+                                         conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "00000000-0000-0000-0000-000000000002"
                  (get-in result [:data :updateUser :id]))
@@ -194,25 +137,20 @@
                                                   conn)]
             (is (= 26
                    (get-in verify-result [:data :user :age]))
-                "Update persisted in database")))
-        (finally
-          (cleanup-database! conn))))))
+                "Update persisted in database"))))
 
-(deftest delete-user-mutation-test
-  (testing "Delete mutation deletes user and returns true"
-    (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
-      (try
+      (testing "Delete mutation deletes user and returns true"
         (let [result (core/execute-query schema
-                                        "mutation {
+                                         "mutation {
                                           deleteUser(input: {
                                             id: \"00000000-0000-0000-0000-000000000003\"
                                           })
                                         }"
-                                        conn)]
+                                         conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= true
                  (get-in result [:data :deleteUser]))
-              "Returns true on successful delete"))
-        (finally
-          (cleanup-database! conn))))))
+              "Returns true on successful delete")))
+      (finally
+        (cleanup-database! conn)))))
+

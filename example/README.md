@@ -12,10 +12,35 @@ The Ringline framework uses **Malli schemas as a single source of truth** to aut
 
 ## Running the Example
 
+### Option 1: HTTP GraphQL Server (Recommended)
+
+Start the HTTP server with Ring, Reitit, and Jetty:
+
 ```bash
 # From the project root
 clojure -M:example
 ```
+
+This starts a GraphQL server on `http://localhost:3000` with:
+- **GraphQL endpoint**: `http://localhost:3000/graphql` - POST GraphQL queries here
+- **GraphiQL UI**: `http://localhost:3000/graphiql` - Interactive GraphQL playground in your browser
+- **Health check**: `http://localhost:3000/health` - Server health status
+
+Open `http://localhost:3000/graphiql` in your browser to interactively explore the GraphQL API!
+
+### Option 2: Run Tests
+
+```bash
+# Run example tests only
+clojure -M:test --focus :example
+
+# Run all framework tests (including example)
+clojure -M:test
+```
+
+### Option 3: REPL Exploration
+
+See the comment block in `example/src/starwars/core.clj` for REPL examples.
 
 ## What This Example Demonstrates
 
@@ -189,25 +214,43 @@ The example includes three sample users:
 - **Bob Smith** (bob@example.com, age 25)
 - **Charlie Brown** (charlie@example.com, age 35)
 
-## Expected Output
+## Using the HTTP Server
 
-When you run `clojure -M:example`, you should see:
+When you run `clojure -M:example`, the server starts and you'll see:
 
 ```
-=== Example Query: Search User by Email ===
-{:data {:user {:id "...", :name "Alice Johnson", :email "alice@example.com", :age 30}}}
+Database created successfully
+Datomic schema installed successfully
+Database and schema initialized
 
-=== Example Mutation: Create New User ===
-{:data {:createUser {:id "...", :name "Diana Prince", :email "diana@example.com", :age 28}}}
+=== Ringline GraphQL Server Started ===
+GraphQL endpoint: http://localhost:3000/graphql
+GraphiQL UI:      http://localhost:3000/graphiql
+Health check:     http://localhost:3000/health
 
-=== Example Mutation: Update User ===
-{:data {:updateUser {:id "...", :name nil, :email nil, :age 26}}}
+Press Ctrl+C to stop the server
+```
 
-=== Verify Update: Query Updated User ===
-{:data {:user {:id "...", :name "Bob Smith", :email "bob@example.com", :age 26}}}
+### Using GraphiQL
 
-=== Example Mutation: Delete User ===
-{:data {:deleteUser true}}
+1. Open `http://localhost:3000/graphiql` in your browser
+2. Try the example queries and mutations listed above
+3. Use the "Docs" panel to explore the auto-generated schema
+
+### Using curl
+
+You can also query the GraphQL endpoint directly:
+
+```bash
+# Query by email
+curl -X POST http://localhost:3000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ user(email: \"alice@example.com\") { id name email age } }"}'
+
+# Create user mutation
+curl -X POST http://localhost:3000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "mutation { createUser(input: { name: \"Diana Prince\", email: \"diana@example.com\", age: 28 }) { id name email age } }"}'
 ```
 
 ## Next Steps
