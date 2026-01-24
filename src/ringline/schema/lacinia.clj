@@ -3,6 +3,7 @@
   (:require [malli.core :as m]
             [ringline.schema.types :as types]
             [ringline.schema.properties :as props]
+            [ringline.schema.scalars :as scalars]
             [clojure.string :as str]))
 
 ;; Malli schemas for validation
@@ -12,12 +13,35 @@
   [:map
    [:objects :map]
    [:queries {:optional true} :map]
-   [:enums {:optional true} :map]])
+   [:enums {:optional true} :map]
+   [:scalars {:optional true} :map]])
 
+;; ============================================================================
+;; T030: Custom Scalar Definitions
+;; ============================================================================
+
+(defn custom-scalars
+  "Define custom GraphQL scalars for Lacinia.
+
+  Returns map of scalar definitions with :parse and :serialize functions."
+  []
+  {:Date {:parse scalars/parse-date
+          :serialize scalars/serialize-date}
+   ;; T050: DateTime scalar with timezone support
+   :DateTime {:parse scalars/parse-datetime
+              :serialize scalars/serialize-datetime}
+   ;; T091: Decimal scalar with precision/scale validation
+   :Decimal {:parse (fn [s] (scalars/parse-decimal s {:precision 38 :scale 10}))
+             :serialize scalars/serialize-decimal}})
+
+;; ============================================================================
 ;; Type mapping
+;; ============================================================================
 
 (defn- field->graphql-type
-  "Convert a field's Malli type to GraphQL (Lacinia) type"
+  "Convert a field's Malli type to GraphQL (Lacinia) type.
+
+  T031: Extended to handle :time/local-date"
   [field]
   (let [base-type (types/malli-type->graphql-type (:type field))]
     (if (= :many (:cardinality field))
@@ -55,7 +79,9 @@
       {:type (field->graphql-type field)})))
 
 (defn- fields->graphql-fields
-  "Convert all fields to Lacinia field definitions"
+  "Convert all fields to Lacinia field definitions.
+
+   Field names are used as-is (no conversion)."
   [fields relationships]
   (into {}
         (map (fn [field]
@@ -127,11 +153,12 @@
      parsed-schemas - Vector of ParsedSchema maps
 
    Returns:
-     Single LaciniaSchema map with all objects and queries merged"
+     Single LaciniaSchema map with all objects, queries, and custom scalars merged"
   [parsed-schemas]
   (let [individual-schemas (map generate-schema parsed-schemas)
         merged {:objects (apply merge {} (map :objects individual-schemas))
-                :queries (apply merge {} (map :queries individual-schemas))}]
+                :queries (apply merge {} (map :queries individual-schemas))
+                :scalars (custom-scalars)}]  ; T030: Add custom scalars
     ;; Validate the result
     (when-not (m/validate LaciniaSchema merged)
       (throw (ex-info "Invalid merged LaciniaSchema"

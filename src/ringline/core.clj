@@ -7,12 +7,34 @@
   (:require [ringline.schema.parser :as parser]
             [ringline.schema.datomic :as datomic]
             [ringline.schema.lacinia :as lacinia]
+            [ringline.schema.scalars :as scalars]
             [ringline.query.converter :as converter]
             [ringline.response.transformer :as transformer]
             [ringline.mutation.parser :as mutation-parser]
             [ringline.mutation.lacinia :as mutation-lacinia]
             [ringline.mutation.executor :as mutation-executor]
+            [malli.core :as m]
+            [malli.registry :as mr]
+            [malli.experimental.time :as met]
             [datomic.api :as d]))
+
+;; Malli Registry Setup
+
+(defn- setup-malli-registry!
+  "Set up Malli registry with custom schemas.
+
+   Registers:
+   - Default Malli schemas (built-in types)
+   - Experimental time schemas (:time/local-date, :time/offset-date-time)
+   - Custom Ringline schemas (:decimal)
+
+   This function is called automatically by init-framework."
+  []
+  (mr/set-default-registry!
+    (mr/composite-registry
+      (m/default-schemas)
+      (met/schemas)
+      (scalars/custom-schemas))))
 
 ;; Framework initialization
 
@@ -38,6 +60,8 @@
    Example:
      (init-framework {:User user-schema :Post post-schema} {})"
   [schemas-map options-map]
+  ;; Set up Malli registry with custom schemas
+  (setup-malli-registry!)
   (try
     (let [;; Parse all Malli schemas
           parsed-schemas (parser/parse-schemas schemas-map)
@@ -100,45 +124,47 @@
    Example:
      (create-mutation-resolver :User :create db-conn user-schema)"
   [entity-type operation datomic-conn schema]
-  (fn resolver [context args value]
-    (try
-      ;; Extract input from args
-      (let [input-data-raw (get args :input)
-            ;; Convert string ID to UUID if present
-            input-data (if-let [id-str (:id input-data-raw)]
-                         (assoc input-data-raw :id (java.util.UUID/fromString id-str))
-                         input-data-raw)
-            entity-id (:id input-data)
+  ;; Parse the schema once when creating the resolver
+  (let [parsed-schema (parser/parse-schema entity-type schema)]
+    (fn resolver [context args value]
+      (try
+        ;; Extract input from args
+        (let [input-data-raw (get args :input)
+              ;; Convert string ID to UUID if present
+              input-data (if-let [id-str (:id input-data-raw)]
+                           (assoc input-data-raw :id (java.util.UUID/fromString id-str))
+                           input-data-raw)
+              entity-id (:id input-data)
 
-            ;; Build mutation input map
-            mutation-input {:operation operation
-                            :entity-type (keyword (name entity-type))
-                            :entity-id entity-id
-                            :data input-data}
+              ;; Build mutation input map
+              mutation-input {:operation operation
+                              :entity-type (keyword (name entity-type))
+                              :entity-id entity-id
+                              :data input-data}
 
-            ;; Execute mutation
-            result (mutation-executor/execute-mutation mutation-input schema datomic-conn)]
+              ;; Execute mutation
+              result (mutation-executor/execute-mutation mutation-input schema parsed-schema datomic-conn)]
 
-        ;; Transform result for GraphQL
-        (if (:success result)
-          (case operation
-            :delete
-            ;; Delete returns boolean
-            true
+          ;; Transform result for GraphQL
+          (if (:success result)
+            (case operation
+              :delete
+              ;; Delete returns boolean
+              true
 
-            ;; Create/Update return entity data
-            ;; Convert UUID to string for GraphQL ID type
-            (merge (:data result)
-                   {:id (str (:entity-id result))}))
+              ;; Create/Update return entity data
+              ;; Convert UUID to string for GraphQL ID type
+              (merge (:data result)
+                     {:id (str (:entity-id result))}))
 
-          ;; On error, return nil and attach errors to context
-          ;; (Lacinia will handle error formatting)
-          (throw (ex-info "Mutation failed"
-                          {:errors (:errors result)}))))
+            ;; On error, attach errors to Lacinia context and return nil
+            ;; This allows GraphQL to return errors in the response without throwing
+            (com.walmartlabs.lacinia.resolve/with-error context
+              (first (:errors result)))))
 
-      (catch Exception e
-        ;; Re-throw to let Lacinia handle error formatting
-        (throw e)))))
+        (catch Exception e
+          ;; Re-throw to let Lacinia handle error formatting
+          (throw e))))))
 
 (defn create-resolver
   "Create a Lacinia resolver function that uses Datomic pull.

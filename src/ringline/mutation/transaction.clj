@@ -1,10 +1,11 @@
 (ns ringline.mutation.transaction
   "Convert GraphQL mutation inputs to Datomic transaction data.
-   
+
    This namespace transforms mutation inputs into Datomic-compatible
    transaction maps with proper tempids, lookup refs, and namespaced attributes."
   (:require [malli.core :as m]
-            [ringline.schema.properties :as props]))
+            [ringline.schema.properties :as props]
+            [ringline.schema.scalars :as scalars]))
 
 ;; T047: Implement generate-tempid
 (defn generate-tempid
@@ -41,21 +42,67 @@
   [entity-type field-name]
   (keyword (name entity-type) (name field-name)))
 
-;; T050: Implement convert-value
+;; T032, T052, T072, T093: Extend convert-value to handle Date, DateTime, Enum, and Decimal scalars
 (defn convert-value
   "Convert GraphQL value to Datomic value.
-   Currently a pass-through, but allows for future type conversions.
-   
+
+   Handles type conversions for custom scalars:
+   - Date strings (ISO8601) → Instant (midnight UTC)
+   - DateTime strings (ISO8601 with timezone) → Instant (UTC)
+   - Enum strings → keywords
+   - Decimal strings → BigDecimal
+
    Args:
-     field-type - The Malli type keyword
+     field-type - The Malli type keyword or vector (e.g., :string, [:enum ...], [:decimal {...}])
      value - The value to convert
-   
+
    Returns:
      Converted value"
   [field-type value]
-  ;; For now, most types pass through directly
-  ;; Future: handle special conversions (e.g., date strings to inst)
-  value)
+  (cond
+    ;; Date scalar: ISO8601 string → LocalDate → java.util.Date
+    ;; OR LocalDate object → java.util.Date (if already parsed by Lacinia)
+    (= field-type :time/local-date)
+    (cond
+      (string? value) (-> value scalars/parse-date scalars/store-date)
+      (instance? java.time.LocalDate value) (scalars/store-date value)
+      :else value)
+
+    ;; T052: DateTime scalar: ISO8601 string with timezone → OffsetDateTime → Instant
+    ;; OR OffsetDateTime object → Instant (if already parsed by Lacinia)
+    (= field-type :time/offset-date-time)
+    (cond
+      (string? value) (-> value scalars/parse-datetime scalars/store-datetime)
+      (instance? java.time.OffsetDateTime value) (scalars/store-datetime value)
+      :else value)
+
+    ;; T072: Enum scalar: string → keyword
+    ;; Enum types are vectors like [:enum :draft :in_progress :completed]
+    ;; Convert hyphens to underscores to match Malli schema conventions
+    (and (vector? field-type) (= :enum (first field-type)))
+    (if (string? value)
+      (keyword (clojure.string/replace value "-" "_"))
+      value)
+
+    ;; T093: Decimal scalar: string → BigDecimal
+    ;; Decimal types are vectors like [:decimal {:precision 38 :scale 10}]
+    (and (vector? field-type) (= :decimal (first field-type)))
+    (if (string? value)
+      (let [props (second field-type)
+            precision (get props :precision 38)
+            scale (get props :scale 10)]
+        (scalars/parse-decimal value {:precision precision :scale scale}))
+      value)
+
+    ;; Simple :decimal keyword (no properties)
+    (= field-type :decimal)
+    (if (string? value)
+      (scalars/parse-decimal value {:precision 38 :scale 10})
+      value)
+
+    ;; Default: pass through
+    :else
+    value))
 
 ;; Helper to get Datomic namespace from schema
 (defn- get-datomic-ns
@@ -64,26 +111,44 @@
   (let [properties (m/properties schema)]
     (props/get-datomic-ns properties)))
 
+;; Helper function to get field type from parsed schema
+(defn- get-field-type
+  "Get the type of a field from the parsed schema.
+
+   Args:
+     parsed-schema - The parsed schema map with :fields vector
+     field-name - The field name keyword
+
+   Returns:
+     The field type keyword or vector (e.g., :string, :time/local-date, [:enum ...])"
+  [parsed-schema field-name]
+  (when-let [field (first (filter #(= field-name (:name %)) (:fields parsed-schema)))]
+    (:type field)))
+
 ;; T051: Implement build-create-transaction
 (defn build-create-transaction
   "Build Datomic transaction map for creating a new entity.
-   
+
    Args:
      entity-type - The entity type keyword
      input-data - Map of field names to values
-     schema - The entity's Malli schema
-   
+     parsed-schema - The parsed entity schema (from parser/parse-schema)
+
    Returns:
      Transaction map with tempid and namespaced attributes"
-  [entity-type input-data schema]
-  (let [datomic-ns (or (get-datomic-ns schema) entity-type)
+  [entity-type input-data parsed-schema]
+  (let [datomic-ns (or (get-in parsed-schema [:properties :ringline/datomic-ns]) entity-type)
         tempid (generate-tempid)
         ;; Generate a new UUID for the entity's :id field
         entity-id (java.util.UUID/randomUUID)
-        ;; Convert all input fields to namespaced attributes
+        ;; Convert all input fields to namespaced attributes with value conversion
         namespaced-data (into {}
                               (map (fn [[k v]]
-                                     [(convert-field-name datomic-ns k) v])
+                                     (let [field-type (get-field-type parsed-schema k)
+                                           converted-value (if field-type
+                                                            (convert-value field-type v)
+                                                            v)]
+                                       [(convert-field-name datomic-ns k) converted-value]))
                                    input-data))]
     (assoc namespaced-data
            :db/id tempid
@@ -92,24 +157,28 @@
 ;; T052: Implement build-update-transaction
 (defn build-update-transaction
   "Build Datomic transaction map for updating an existing entity.
-   
+
    Args:
      entity-type - The entity type keyword
      entity-id - The entity's UUID
      input-data - Map of field names to values (partial update)
-     schema - The entity's Malli schema
-   
+     parsed-schema - The parsed entity schema (from parser/parse-schema)
+
    Returns:
      Transaction map with lookup ref and namespaced attributes"
-  [entity-type entity-id input-data schema]
-  (let [datomic-ns (or (get-datomic-ns schema) entity-type)
+  [entity-type entity-id input-data parsed-schema]
+  (let [datomic-ns (or (get-in parsed-schema [:properties :ringline/datomic-ns]) entity-type)
         lookup-ref (generate-lookup-ref datomic-ns entity-id)
         ;; Filter out :id field (it's already in the lookup ref)
-        ;; and convert remaining fields to namespaced attributes
+        ;; and convert remaining fields to namespaced attributes with value conversion
         namespaced-data (into {}
                               (comp (filter (fn [[k _]] (not= k :id)))
                                     (map (fn [[k v]]
-                                           [(convert-field-name datomic-ns k) v])))
+                                           (let [field-type (get-field-type parsed-schema k)
+                                                 converted-value (if field-type
+                                                                  (convert-value field-type v)
+                                                                  v)]
+                                             [(convert-field-name datomic-ns k) converted-value]))))
                               input-data)]
     (assoc namespaced-data :db/id lookup-ref)))
 
@@ -120,48 +189,48 @@
    Args:
      entity-type - The entity type keyword
      entity-id - The entity's UUID
-     schema - The entity's Malli schema
+     parsed-schema - The parsed entity schema (from parser/parse-schema)
 
    Returns:
      List (:db/retractEntity lookup-ref)"
-  [entity-type entity-id schema]
-  (let [datomic-ns (or (get-datomic-ns schema) entity-type)
+  [entity-type entity-id parsed-schema]
+  (let [datomic-ns (or (get-in parsed-schema [:properties :ringline/datomic-ns]) entity-type)
         lookup-ref (generate-lookup-ref datomic-ns entity-id)]
     (list :db/retractEntity lookup-ref)))
 
 ;; Main conversion function
 (defn mutation-input->transaction
   "Convert mutation input to Datomic transaction data.
-   
+
    Args:
      mutation-input - Map with :operation, :entity-type, :entity-id (optional), :data (optional)
-     schema - The entity's Malli schema
-   
+     parsed-schema - The parsed entity schema (from parser/parse-schema)
+
    Returns:
      Transaction data (map for create/update, vector for delete)"
-  [mutation-input schema]
+  [mutation-input parsed-schema]
   (let [{:keys [operation entity-type entity-id data]} mutation-input]
     (case operation
       :create
       (do
         (when-not data
           (throw (ex-info "Create operation requires :data" {:input mutation-input})))
-        (build-create-transaction entity-type data schema))
-      
+        (build-create-transaction entity-type data parsed-schema))
+
       :update
       (do
         (when-not entity-id
           (throw (ex-info "Update operation requires :entity-id" {:input mutation-input})))
         (when-not data
           (throw (ex-info "Update operation requires :data" {:input mutation-input})))
-        (build-update-transaction entity-type entity-id data schema))
-      
+        (build-update-transaction entity-type entity-id data parsed-schema))
+
       :delete
       (do
         (when-not entity-id
           (throw (ex-info "Delete operation requires :entity-id" {:input mutation-input})))
-        (build-delete-transaction entity-type entity-id schema))
-      
+        (build-delete-transaction entity-type entity-id parsed-schema))
+
       (throw (ex-info "Invalid operation type" {:operation operation})))))
 
 ;; Rich comment block with REPL examples

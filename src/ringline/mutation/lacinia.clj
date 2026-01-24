@@ -112,10 +112,18 @@
                         ;; Extract type keyword from schema (handle both keywords and Malli schema objects)
                         field-type (if (keyword? field-schema)
                                      field-schema
-                                     (m/type field-schema))
+                                     ;; For Malli schema objects, check if it's a schema reference
+                                     (let [schema-type (m/type field-schema)]
+                                       (if (= schema-type :malli.core/schema)
+                                         ;; Dereference schema reference using m/form
+                                         (let [form (m/form field-schema)]
+                                           (if (keyword? form)
+                                             form
+                                             schema-type))
+                                         schema-type)))
                         optional? (:optional options false)
-                        ;; Convert kebab-case to snake_case for GraphQL
-                        gql-field-name (keyword (str/replace (name field-name) #"-" "_"))
+                        ;; Field names are used as-is (no conversion)
+                        gql-field-name field-name
                         gql-type (malli-type->graphql-type field-type)]
                     [gql-field-name
                      {:type (if optional?
