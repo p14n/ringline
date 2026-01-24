@@ -1,0 +1,140 @@
+;; Contract: Transaction Converter
+;; Namespace: ringline.mutation.transaction
+;; Purpose: Convert GraphQL mutation inputs to Datomic transaction data
+
+{:contract/name "Transaction Converter"
+ :contract/version "1.0.0"
+ :contract/namespace 'ringline.mutation.transaction
+
+ :functions
+ [{:name 'input->transaction
+   :doc "Convert GraphQL mutation input to Datomic transaction data.
+         Handles create, update, and delete operations with proper attribute namespacing."
+   :args [{:name 'operation
+           :type [:enum :create :update :delete]
+           :doc "The mutation operation type"}
+          {:name 'entity-type
+           :type :keyword
+           :doc "The entity type (e.g., :user, :post)"}
+          {:name 'input-data
+           :type :map
+           :doc "The GraphQL input data"}
+          {:name 'parsed-schema
+           :type :map
+           :doc "The parsed entity schema with Datomic namespace info"}]
+   :returns {:type [:vector :map]
+             :doc "Datomic transaction data (vector of transaction maps)"}
+   :examples [{:input {:operation :create
+                       :entity-type :user
+                       :input-data {:username "alice" :email "alice@example.com"}
+                       :parsed-schema {:datomic-ns :user :fields [...]}}
+               :output [{:db/id #db/id[:db.part/user -1]
+                         :user/id #uuid "..."
+                         :user/username "alice"
+                         :user/email "alice@example.com"}]}
+              {:input {:operation :update
+                       :entity-type :user
+                       :input-data {:id #uuid "550e8400-e29b-41d4-a716-446655440000"
+                                    :email "newemail@example.com"}
+                       :parsed-schema {:datomic-ns :user :fields [...]}}
+               :output [{:db/id [:user/id #uuid "550e8400-e29b-41d4-a716-446655440000"]
+                         :user/email "newemail@example.com"}]}
+              {:input {:operation :delete
+                       :entity-type :user
+                       :input-data {:id #uuid "550e8400-e29b-41d4-a716-446655440000"}
+                       :parsed-schema {:datomic-ns :user :fields [...]}}
+               :output [[:db/retractEntity [:user/id #uuid "550e8400-e29b-41d4-a716-446655440000"]]]}]}
+
+  {:name 'build-create-transaction
+   :doc "Build Datomic transaction for creating a new entity"
+   :args [{:name 'entity-type
+           :type :keyword
+           :doc "The entity type"}
+          {:name 'input-data
+           :type :map
+           :doc "The input data for the new entity"}
+          {:name 'parsed-schema
+           :type :map
+           :doc "The parsed entity schema"}]
+   :returns {:type [:vector :map]
+             :doc "Transaction data with tempid"}
+   :examples [{:input {:entity-type :user
+                       :input-data {:username "alice" :email "alice@example.com"}
+                       :parsed-schema {:datomic-ns :user}}
+               :output [{:db/id #db/id[:db.part/user -1]
+                         :user/id #uuid "..."
+                         :user/username "alice"
+                         :user/email "alice@example.com"}]}]}
+
+  {:name 'build-update-transaction
+   :doc "Build Datomic transaction for updating an existing entity (partial update)"
+   :args [{:name 'entity-type
+           :type :keyword
+           :doc "The entity type"}
+          {:name 'entity-id
+           :type :uuid
+           :doc "The entity ID to update"}
+          {:name 'input-data
+           :type :map
+           :doc "The fields to update (partial)"}
+          {:name 'parsed-schema
+           :type :map
+           :doc "The parsed entity schema"}]
+   :returns {:type [:vector :map]
+             :doc "Transaction data with lookup ref"}
+   :examples [{:input {:entity-type :user
+                       :entity-id #uuid "550e8400-e29b-41d4-a716-446655440000"
+                       :input-data {:email "newemail@example.com"}
+                       :parsed-schema {:datomic-ns :user}}
+               :output [{:db/id [:user/id #uuid "550e8400-e29b-41d4-a716-446655440000"]
+                         :user/email "newemail@example.com"}]}]}
+
+  {:name 'build-delete-transaction
+   :doc "Build Datomic transaction for deleting an entity"
+   :args [{:name 'entity-type
+           :type :keyword
+           :doc "The entity type"}
+          {:name 'entity-id
+           :type :uuid
+           :doc "The entity ID to delete"}
+          {:name 'parsed-schema
+           :type :map
+           :doc "The parsed entity schema"}]
+   :returns {:type :vector
+             :doc "Transaction data with retractEntity"}
+   :examples [{:input {:entity-type :user
+                       :entity-id #uuid "550e8400-e29b-41d4-a716-446655440000"
+                       :parsed-schema {:datomic-ns :user}}
+               :output [[:db/retractEntity [:user/id #uuid "550e8400-e29b-41d4-a716-446655440000"]]]}]}
+
+  {:name 'namespace-attributes
+   :doc "Add Datomic namespace prefix to attribute keys"
+   :args [{:name 'datomic-ns
+           :type :keyword
+           :doc "The Datomic namespace (e.g., :user)"}
+          {:name 'data
+           :type :map
+           :doc "Map of field names to values"}]
+   :returns {:type :map
+             :doc "Map with namespaced attribute keys"}
+   :examples [{:input {:datomic-ns :user
+                       :data {:username "alice" :email "alice@example.com"}}
+               :output {:user/username "alice" :user/email "alice@example.com"}}]}]
+
+ :dependencies ['datomic.api
+                'malli.core
+                'ringline.schema.parser]
+
+ :test-requirements
+ ["Test create transaction with all fields"
+  "Test create transaction generates new UUID for ID"
+  "Test create transaction uses tempid"
+  "Test update transaction with partial data"
+  "Test update transaction uses lookup ref"
+  "Test delete transaction with entity ID"
+  "Test attribute namespacing"
+  "Test handling relationship fields (ref-to)"
+  "Test handling vector fields (cardinality many)"
+  "Test handling missing required fields (should error)"
+  "Test handling invalid entity ID format"]}
+

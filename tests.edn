@@ -2,6 +2,10 @@
 {:tests [{:id :unit
           :test-paths ["test"]
           :source-paths ["src"]
+          :ns-patterns [".*-test$"]}
+         {:id :example
+          :test-paths ["example/test"]
+          :source-paths ["src" "example/src"]
           :ns-patterns [".*-test$"]}]
  
  :plugins [:kaocha.plugin/randomize

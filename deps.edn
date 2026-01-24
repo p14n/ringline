@@ -15,8 +15,17 @@
  {:dev {:extra-paths ["dev" "test"]
         :extra-deps {org.clojure/tools.namespace {:mvn/version "1.5.0"}}}
   
-  :test {:extra-paths ["test"]
-         :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+  :test {:extra-paths ["test" "example/src" "example/test"]
+         :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}
+                      org.babashka/http-client {:mvn/version "0.4.22"}
+                      org.babashka/json {:mvn/version "0.1.6"}
+                      ;; Ring - HTTP server (needed for example tests)
+                      ring/ring-core {:mvn/version "1.12.2"}
+                      ring/ring-jetty-adapter {:mvn/version "1.12.2"}
+                      ring/ring-json {:mvn/version "0.5.1"}
+                      ;; Reitit - HTTP routing (needed for example tests)
+                      metosin/reitit {:mvn/version "0.7.2"}
+                      metosin/reitit-ring {:mvn/version "0.7.2"}}
          :main-opts ["-m" "kaocha.runner"]
          :exec-fn kaocha.runner/exec-fn
          :exec-args {:randomize? false
@@ -26,5 +35,16 @@
                       cider/cider-nrepl {:mvn/version "0.50.2"}}}
   
   :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.5"}}
-          :ns-default build}}}
+          :ns-default build}
+
+  :example {:extra-paths ["example/src" "example/resources" "example/test"]
+            :extra-deps {;; Ring - HTTP server abstraction
+                         ring/ring-core {:mvn/version "1.12.2"}
+                         ring/ring-jetty-adapter {:mvn/version "1.12.2"}
+                         ring/ring-json {:mvn/version "0.5.1"}
+
+                         ;; Reitit - HTTP routing
+                         metosin/reitit {:mvn/version "0.7.2"}
+                         metosin/reitit-ring {:mvn/version "0.7.2"}}
+            :main-opts ["-m" "starwars.server"]}}}
 

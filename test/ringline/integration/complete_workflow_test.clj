@@ -125,3 +125,99 @@
       (is (some? (get-in lacinia-schema [:objects :Comment :fields :author]))
           "Comment has author relationship"))))
 
+(deftest mutation-workflow-test
+  (testing "Complete mutation workflow: Schema → Lacinia mutations → Execution"
+    (let [;; Step 1: Initialize framework with mutation-enabled schema
+          schemas {:user fixtures/user-with-mutations-schema}
+          framework (core/init-framework schemas {})
+
+          ;; Verify framework initialization with mutations
+          _ (do
+              (is (map? framework) "Framework initialized")
+              (is (seq (:mutations framework)) "Mutations parsed")
+              (is (= 1 (count (:mutations framework))) "One entity with mutations"))
+
+          ;; Step 2: Verify Lacinia mutation schema structure
+          lacinia-schema (:lacinia framework)
+          _ (do
+              (is (contains? lacinia-schema :mutations) "Has mutations key")
+              (is (contains? lacinia-schema :input-objects) "Has input-objects key")
+              (is (contains? (:mutations lacinia-schema) :createUser) "Has createUser mutation")
+              (is (contains? (:mutations lacinia-schema) :updateUser) "Has updateUser mutation")
+              (is (contains? (:mutations lacinia-schema) :deleteUser) "Has deleteUser mutation")
+              (is (contains? (:input-objects lacinia-schema) :CreateUserInput) "Has CreateUserInput")
+              (is (contains? (:input-objects lacinia-schema) :UpdateUserInput) "Has UpdateUserInput"))
+
+          ;; Step 3: Verify mutation definitions
+          create-mutation (get-in lacinia-schema [:mutations :createUser])
+          update-mutation (get-in lacinia-schema [:mutations :updateUser])
+          delete-mutation (get-in lacinia-schema [:mutations :deleteUser])]
+
+      ;; Verify create mutation structure
+      (is (= :User (:type create-mutation)) "Create returns User type")
+      (is (contains? (:args create-mutation) :input) "Create has input arg")
+
+      ;; Verify update mutation structure
+      (is (= :User (:type update-mutation)) "Update returns User type")
+      (is (contains? (:args update-mutation) :input) "Update has input arg")
+
+      ;; Verify delete mutation structure
+      (is (= :Boolean (:type delete-mutation)) "Delete returns Boolean type")
+      (is (contains? (:args delete-mutation) :input) "Delete has input arg")))
+
+  (testing "Mutation resolver creation and attachment"
+    (let [;; Initialize framework
+          schemas {:user fixtures/user-with-mutations-schema}
+          framework (core/init-framework schemas {})
+
+          ;; Create individual mutation resolver with mock connection
+          mock-db-conn {:type :mock-connection
+                       :transact-fn (fn [tx-data]
+                                     {:db-before {}
+                                      :db-after {}
+                                      :tx-data tx-data
+                                      :tempids {}})}
+          create-resolver (core/create-mutation-resolver
+                          :user
+                          :create
+                          mock-db-conn
+                          fixtures/user-with-mutations-schema)]
+
+      ;; Verify resolver is a function
+      (is (fn? create-resolver) "Resolver is a function")
+
+      ;; Test resolver execution (will use mock transaction)
+      (let [context {}
+            args {:input {:username "alice"
+                         :email "alice@example.com"
+                         :created-at 1234567890}}
+            result (create-resolver context args nil)]
+
+        ;; Verify result structure - mutation resolvers return entity data for GraphQL
+        (is (map? result) "Result is a map")
+        (is (contains? result :id) "Has id field (generated UUID)")
+        (is (contains? result :username) "Has username field")
+        (is (= "alice" (:username result)) "Username matches input"))))
+
+  (testing "Attach mutation resolvers to schema"
+    (let [;; Initialize framework
+          schemas {:user fixtures/user-with-mutations-schema}
+          framework (core/init-framework schemas {})
+
+          ;; Attach resolvers
+          mock-db-conn nil
+          lacinia-with-resolvers (core/attach-mutation-resolvers
+                                 (:lacinia framework)
+                                 schemas
+                                 mock-db-conn)
+
+          ;; Verify resolvers attached
+          create-mutation (get-in lacinia-with-resolvers [:mutations :createUser])
+          update-mutation (get-in lacinia-with-resolvers [:mutations :updateUser])
+          delete-mutation (get-in lacinia-with-resolvers [:mutations :deleteUser])]
+
+      ;; Verify all mutations have resolvers
+      (is (fn? (:resolve create-mutation)) "createUser has resolver")
+      (is (fn? (:resolve update-mutation)) "updateUser has resolver")
+      (is (fn? (:resolve delete-mutation)) "deleteUser has resolver"))))
+

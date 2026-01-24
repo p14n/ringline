@@ -59,10 +59,16 @@
   [field entity-namespace]
   (let [datomic-type (field->datomic-type field)
         cardinality (field->datomic-cardinality field)
-        ident (apply-namespace (:name field) entity-namespace)]
+        ident (apply-namespace (:name field) entity-namespace)
+        ;; ID fields should be unique identities for lookup refs
+        is-id-field? (= :id (:name field))]
     (cond-> {:db/ident ident
              :db/valueType datomic-type
              :db/cardinality cardinality}
+      ;; Add uniqueness constraint for ID fields
+      is-id-field?
+      (assoc :db/unique :db.unique/identity)
+
       ;; Add doc if field has properties with documentation
       (get-in field [:properties :doc])
       (assoc :db/doc (get-in field [:properties :doc])))))

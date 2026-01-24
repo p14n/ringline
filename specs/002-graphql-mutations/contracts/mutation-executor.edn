@@ -1,0 +1,185 @@
+;; Contract: Mutation Executor
+;; Namespace: ringline.mutation.executor
+;; Purpose: Execute mutations and return formatted results
+
+{:contract/name "Mutation Executor"
+ :contract/version "1.0.0"
+ :contract/namespace 'ringline.mutation.executor
+
+ :functions
+ [{:name 'execute-mutation
+   :doc "Execute a mutation operation: validate input, convert to transaction, execute, return result.
+         This is the main entry point for mutation execution."
+   :args [{:name 'db-conn
+           :type :datomic-connection
+           :doc "Datomic database connection"}
+          {:name 'operation
+           :type [:enum :create :update :delete]
+           :doc "The mutation operation type"}
+          {:name 'entity-type
+           :type :keyword
+           :doc "The entity type"}
+          {:name 'input-data
+           :type :map
+           :doc "The GraphQL input data"}
+          {:name 'parsed-schema
+           :type :map
+           :doc "The parsed entity schema"}
+          {:name 'mutation-def
+           :type :map
+           :doc "The mutation definition with input schema"}]
+   :returns {:type :map
+             :schema [:map
+                      [:success :boolean]
+                      [:operation [:enum :create :update :delete]]
+                      [:entity-type :keyword]
+                      [:data {:optional true} :map]
+                      [:entity-id {:optional true} :uuid]
+                      [:errors {:optional true} [:vector :map]]
+                      [:timestamp :int]]
+             :doc "Mutation result with success status, data, or errors"}
+   :examples [{:input {:db-conn 'conn
+                       :operation :create
+                       :entity-type :user
+                       :input-data {:username "alice" :email "alice@example.com"}
+                       :parsed-schema {...}
+                       :mutation-def {:input-schema [...]}}
+               :output {:success true
+                        :operation :create
+                        :entity-type :user
+                        :data {:id #uuid "..." :username "alice" :email "alice@example.com"}
+                        :entity-id #uuid "..."
+                        :timestamp 1706140801000}}
+              {:input {:db-conn 'conn
+                       :operation :create
+                       :entity-type :user
+                       :input-data {:username "alice" :email "not-an-email"}
+                       :parsed-schema {...}
+                       :mutation-def {:input-schema [...]}}
+               :output {:success false
+                        :operation :create
+                        :entity-type :user
+                        :errors [{:code :VALIDATION_ERROR
+                                  :message "Invalid email format"
+                                  :field :email}]
+                        :timestamp 1706140801000}}]}
+
+  {:name 'validate-input
+   :doc "Validate mutation input against Malli schema. Returns nil if valid, error map if invalid."
+   :args [{:name 'input-data
+           :type :map
+           :doc "The input data to validate"}
+          {:name 'input-schema
+           :type :malli-schema
+           :doc "The Malli schema to validate against"}]
+   :returns {:type [:or :nil :map]
+             :doc "nil if valid, error map if invalid"}
+   :examples [{:input {:input-data {:username "alice" :email "alice@example.com"}
+                       :input-schema [:map [:username :string] [:email :string]]}
+               :output nil}
+              {:input {:input-data {:username "alice" :email "not-an-email"}
+                       :input-schema [:map [:username :string] [:email [:re #".*@.*"]]]}
+               :output {:code :VALIDATION_ERROR
+                        :message "Invalid email format"
+                        :field :email
+                        :value "not-an-email"}}]}
+
+  {:name 'execute-transaction
+   :doc "Execute Datomic transaction and return transaction result"
+   :args [{:name 'db-conn
+           :type :datomic-connection
+           :doc "Datomic database connection"}
+          {:name 'tx-data
+           :type [:vector :any]
+           :doc "Datomic transaction data"}]
+   :returns {:type [:or :map :map]
+             :doc "Transaction result on success, error map on failure"}
+   :examples [{:input {:db-conn 'conn
+                       :tx-data [{:db/id #db/id[:db.part/user -1]
+                                  :user/username "alice"}]}
+               :output {:db-before 'db-before
+                        :db-after 'db-after
+                        :tx-data [...]
+                        :tempids {-1 12345}}}]}
+
+  {:name 'format-success-result
+   :doc "Format successful mutation result for GraphQL response"
+   :args [{:name 'operation
+           :type [:enum :create :update :delete]
+           :doc "The mutation operation"}
+          {:name 'entity-type
+           :type :keyword
+           :doc "The entity type"}
+          {:name 'entity-data
+           :type [:or :map :nil]
+           :doc "The entity data (nil for delete)"}
+          {:name 'entity-id
+           :type :uuid
+           :doc "The entity ID"}]
+   :returns {:type :map
+             :doc "Formatted success result"}
+   :examples [{:input {:operation :create
+                       :entity-type :user
+                       :entity-data {:id #uuid "..." :username "alice"}
+                       :entity-id #uuid "..."}
+               :output {:success true
+                        :operation :create
+                        :entity-type :user
+                        :data {:id #uuid "..." :username "alice"}
+                        :entity-id #uuid "..."
+                        :timestamp 1706140801000}}]}
+
+  {:name 'format-error-result
+   :doc "Format error result for GraphQL response"
+   :args [{:name 'operation
+           :type [:enum :create :update :delete]
+           :doc "The mutation operation"}
+          {:name 'entity-type
+           :type :keyword
+           :doc "The entity type"}
+          {:name 'errors
+           :type [:vector :map]
+           :doc "Vector of error maps"}]
+   :returns {:type :map
+             :doc "Formatted error result"}
+   :examples [{:input {:operation :create
+                       :entity-type :user
+                       :errors [{:code :VALIDATION_ERROR :message "Invalid email"}]}
+               :output {:success false
+                        :operation :create
+                        :entity-type :user
+                        :errors [{:code :VALIDATION_ERROR :message "Invalid email"}]
+                        :timestamp 1706140801000}}]}
+
+  {:name 'resolve-created-entity
+   :doc "Resolve tempid and fetch created entity from transaction result"
+   :args [{:name 'tx-result
+           :type :map
+           :doc "Datomic transaction result"}
+          {:name 'tempid
+           :type :any
+           :doc "The tempid used in transaction"}]
+   :returns {:type :map
+             :doc "The created entity data"}
+   :examples [{:input {:tx-result {:db-after 'db :tempids {-1 12345}}
+                       :tempid -1}
+               :output {:id #uuid "..." :username "alice" :email "alice@example.com"}}]}]
+
+ :dependencies ['datomic.api
+                'malli.core
+                'ringline.mutation.transaction
+                'ringline.response.transformer]
+
+ :test-requirements
+ ["Test successful create mutation"
+  "Test successful update mutation"
+  "Test successful delete mutation"
+  "Test validation error handling"
+  "Test transaction error handling (constraint violation)"
+  "Test entity not found error (update/delete)"
+  "Test result formatting for success"
+  "Test result formatting for errors"
+  "Test tempid resolution for creates"
+  "Test timestamp generation"
+  "Test integration with response transformer"]}
+
