@@ -70,3 +70,48 @@
                [:notifications :boolean]
                [:language :string]]]])
 
+;; ========================================
+;; Mutation Test Fixtures
+;; ========================================
+
+;; Schema with all mutation operations
+(def user-with-mutations-schema
+  [:map
+   {:ringline/datomic-ns :user
+    :ringline/query-root true
+    :ringline/searchable [:email :username]
+    :ringline/mutations #{:create :update :delete}}
+   [:id :uuid]
+   [:username :string]
+   [:email :string]
+   [:created-at :int]])
+
+;; Schema with subset of mutations (create and update only)
+(def post-with-partial-mutations-schema
+  [:map
+   {:ringline/datomic-ns :post
+    :ringline/query-root true
+    :ringline/mutations #{:create :update}}
+   [:id :uuid]
+   [:title :string]
+   [:content :string]
+   [:published? :boolean]
+   [:created-at :int]])
+
+;; Schema with no mutations property (read-only entity)
+(def readonly-schema
+  [:map
+   {:ringline/datomic-ns :audit-log
+    :ringline/query-root true}
+   [:id :uuid]
+   [:event :string]
+   [:timestamp :int]])
+
+;; Schema with only delete mutation
+(def deletable-only-schema
+  [:map
+   {:ringline/datomic-ns :temp-data
+    :ringline/mutations #{:delete}}
+   [:id :uuid]
+   [:data :string]])
+

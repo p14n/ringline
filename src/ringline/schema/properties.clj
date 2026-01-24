@@ -36,6 +36,15 @@
    and GraphQL object type references."
   :ringline/ref-to)
 
+(def mutations
+  "Property key for specifying allowed mutation operations for an entity.
+
+   Example: {:ringline/mutations #{:create :update :delete}}
+
+   This will generate GraphQL mutations for the specified operations.
+   Valid operations: :create, :update, :delete"
+  :ringline/mutations)
+
 ;; Helper functions for property access
 
 (defn get-datomic-ns
@@ -57,4 +66,10 @@
   "Extract the reference target entity from field properties"
   [properties]
   (get properties ref-to))
+
+(defn get-mutations
+  "Extract allowed mutation operations from schema properties.
+   Returns empty set if not present."
+  [properties]
+  (get properties mutations #{}))
 
