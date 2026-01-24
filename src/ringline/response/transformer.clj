@@ -36,7 +36,7 @@
              datomic-entity)))
 
 (defn- transform-field-value
-  "Transform a field value, handling nested entities"
+  "Transform a field value, handling nested entities and UUID conversion"
   [value parsed-schema]
   (cond
     ;; Vector of entities (many relationship)
@@ -46,6 +46,10 @@
     ;; Single entity (one relationship)
     (and (map? value) (some namespace (keys value)))
     (transform-entity value parsed-schema)
+
+    ;; UUID - convert to string for GraphQL ID type
+    (instance? java.util.UUID value)
+    (str value)
 
     ;; Primitive value
     :else value))
@@ -76,6 +80,17 @@
   [datomic-entities parsed-schema]
   (mapv #(datomic->graphql % parsed-schema) datomic-entities))
 
+(defn- transform-value
+  "Transform a value for GraphQL (e.g., UUID to string)"
+  [value]
+  (cond
+    ;; UUID - convert to string for GraphQL ID type
+    (instance? java.util.UUID value)
+    (str value)
+
+    ;; Other values pass through
+    :else value))
+
 (defn- filter-by-selections
   "Filter entity fields to only include selected fields"
   [entity selections nested-queries entity-ns]
@@ -95,14 +110,14 @@
                                 transformed-value (cond
                                                     (vector? value)
                                                     (mapv #(filter-by-selections % nested-selections nested-nested target-ns) value)
-                                                    
+
                                                     (map? value)
                                                     (filter-by-selections value nested-selections nested-nested target-ns)
-                                                    
-                                                    :else value)]
+
+                                                    :else (transform-value value))]
                             [simple-field transformed-value])
-                          ;; Regular field
-                          [simple-field value])))))
+                          ;; Regular field - transform value
+                          [simple-field (transform-value value)])))))
                 selections))))
 
 (defn transform-with-selections

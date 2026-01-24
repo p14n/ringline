@@ -163,8 +163,8 @@
   [entity-type datomic-conn parsed-schema]
   (fn resolver [context args value]
     (try
-      ;; Build query context from Lacinia
-      (let [query-ctx (converter/build-query-context context entity-type)
+      ;; Build query context from Lacinia, passing args explicitly
+      (let [query-ctx (converter/build-query-context context entity-type args)
 
             ;; Convert to Datomic pull pattern with where clauses
             pull-result (converter/pull-with-args query-ctx)

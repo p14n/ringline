@@ -104,28 +104,30 @@
   [entity-type entity-id input-data schema]
   (let [datomic-ns (or (get-datomic-ns schema) entity-type)
         lookup-ref (generate-lookup-ref datomic-ns entity-id)
-        ;; Convert all input fields to namespaced attributes
+        ;; Filter out :id field (it's already in the lookup ref)
+        ;; and convert remaining fields to namespaced attributes
         namespaced-data (into {}
-                              (map (fn [[k v]]
-                                     [(convert-field-name datomic-ns k) v])
-                                   input-data))]
+                              (comp (filter (fn [[k _]] (not= k :id)))
+                                    (map (fn [[k v]]
+                                           [(convert-field-name datomic-ns k) v])))
+                              input-data)]
     (assoc namespaced-data :db/id lookup-ref)))
 
 ;; T053: Implement build-delete-transaction
 (defn build-delete-transaction
   "Build Datomic transaction for deleting an entity.
-   
+
    Args:
      entity-type - The entity type keyword
      entity-id - The entity's UUID
      schema - The entity's Malli schema
-   
+
    Returns:
-     Vector [:db/retractEntity lookup-ref]"
+     List (:db/retractEntity lookup-ref)"
   [entity-type entity-id schema]
   (let [datomic-ns (or (get-datomic-ns schema) entity-type)
         lookup-ref (generate-lookup-ref datomic-ns entity-id)]
-    [:db/retractEntity lookup-ref]))
+    (list :db/retractEntity lookup-ref)))
 
 ;; Main conversion function
 (defn mutation-input->transaction

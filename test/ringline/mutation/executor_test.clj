@@ -7,7 +7,13 @@
 ;; Mock Datomic connection for testing
 (def mock-db-conn
   {:type :mock-connection
-   :db-after {:entities {}}})
+   :db-after {:entities {}}
+   ;; Mock transact function that returns a transaction result
+   :transact-fn (fn [tx-data]
+                  {:db-before {}
+                   :db-after {}
+                   :tx-data tx-data
+                   :tempids {}})})
 
 ;; T054: Test successful create mutation execution
 (deftest execute-create-mutation-test

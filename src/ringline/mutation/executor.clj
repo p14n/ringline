@@ -5,7 +5,8 @@
    validation, transaction building, execution, and result formatting."
   (:require [malli.core :as m]
             [ringline.mutation.parser :as parser]
-            [ringline.mutation.transaction :as tx]))
+            [ringline.mutation.transaction :as tx]
+            [datomic.api]))
 
 ;; T065: Implement check-operation-allowed
 (defn check-operation-allowed
@@ -63,9 +64,14 @@
 
     ;; Validate input data against derived schema (for create/update)
     (when (and data (#{:create :update} operation))
-      (let [input-schema (parser/derive-input-schema schema operation)]
-        (when-not (m/validate input-schema data)
-          (let [explanation (m/explain input-schema data)]
+      (let [input-schema (parser/derive-input-schema schema operation)
+            ;; For update operations, merge entity-id into data for validation
+            ;; (the input schema expects :id to be present)
+            validation-data (if (and (= operation :update) (:entity-id mutation-input))
+                             (assoc data :id (:entity-id mutation-input))
+                             data)]
+        (when-not (m/validate input-schema validation-data)
+          (let [explanation (m/explain input-schema validation-data)]
             (swap! errors conj
                    (build-validation-error
                     (str "Invalid input data: " (pr-str explanation))))))))
@@ -113,26 +119,31 @@
 
 ;; T070: Implement execute-transaction (mock for now)
 (defn- execute-transaction
-  "Execute a Datomic transaction (mock implementation for testing).
+  "Execute a Datomic transaction.
 
-   In production, this would call (d/transact conn tx-data).
-   For now, returns a mock result.
+   Supports both real Datomic connections and mock connections with custom transact functions.
 
    Args:
-     conn - Datomic connection
-     tx-data - Transaction data
+     conn - Datomic connection or mock connection with :transact-fn
+     tx-data - Transaction data (map or vector of maps)
 
    Returns:
-     Mock transaction result"
+     Transaction result with :db-after, :tx-data, :tempids"
   [conn tx-data]
   ;; Check if connection has a custom transact function (for testing/mocking)
   (if-let [transact-fn (:transact-fn conn)]
+    ;; Use custom transact function (for mocking/testing)
     (transact-fn (if (vector? tx-data) tx-data [tx-data]))
-    ;; Default mock implementation - in production would be:
-    ;; @(d/transact conn {:tx-data (if (vector? tx-data) [tx-data] tx-data)})
-    {:db-after (:db-after conn)
-     :tx-data tx-data
-     :tempids {}}))
+    ;; Use real Datomic transact
+    (try
+      (let [tx-data-vec (if (vector? tx-data) tx-data [tx-data])
+            result @(datomic.api/transact conn tx-data-vec)]
+        result)
+      (catch Exception e
+        (throw (ex-info "Datomic transaction failed"
+                       {:tx-data tx-data
+                        :error (.getMessage e)}
+                       e))))))
 
 ;; T071: Implement execute-mutation
 (defn execute-mutation
@@ -173,11 +184,14 @@
 
         (catch Exception e
           ;; Handle transaction errors
-          (format-error-result
-           operation
-           entity-type
-           [{:code :TRANSACTION_FAILED
-             :message (.getMessage e)}]))))))
+          (let [cause-msg (if-let [cause (.getCause e)]
+                           (.getMessage cause)
+                           (.getMessage e))]
+            (format-error-result
+             operation
+             entity-type
+             [{:code :TRANSACTION_FAILED
+               :message (str "Datomic transaction failed: " cause-msg)}])))))))
 
 ;; Rich comment block with REPL examples
 (comment

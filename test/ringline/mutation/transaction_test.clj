@@ -65,7 +65,7 @@
                  :entity-type :user
                  :entity-id user-id}
           result (tx/mutation-input->transaction input fixtures/user-with-mutations-schema)]
-      (is (vector? result) "Returns a vector for retractEntity")
+      (is (list? result) "Returns a list for retractEntity (Datomic requires list, not vector)")
       (is (= :db/retractEntity (first result)) "First element is :db/retractEntity")
       (is (vector? (second result)) "Second element is lookup ref")
       (is (= [:user/id user-id] (second result)) "Lookup ref uses :user/id"))))

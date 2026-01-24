@@ -50,16 +50,19 @@
 
 ;; T009: Test deriving update input schema (all fields optional)
 (deftest derive-update-input-schema-test
-  (testing "derive-input-schema for update makes all fields optional, excludes ID"
+  (testing "derive-input-schema for update includes required ID and optional other fields"
     (let [schema fixtures/user-with-mutations-schema
           result (parser/derive-input-schema schema :update)]
       (is (vector? result) "Returns a Malli schema vector")
       (is (= :map (first result)) "Is a map schema")
-      ;; Update schema should have optional username, email, created-at but NOT id
-      (let [fields (rest result)]
-        (is (every? #(and (vector? %) (map? (second %)) (:optional (second %))) fields)
-            "All fields are optional")
-        (is (not (some #(= :id (first %)) fields)) "Does not have id field")))))
+      ;; Update schema should have required :id and optional username, email, created-at
+      (let [fields (rest result)
+            id-field (first (filter #(= :id (first %)) fields))
+            other-fields (filter #(not= :id (first %)) fields)]
+        (is (some? id-field) "Has id field")
+        (is (not (:optional (second id-field))) "ID field is required (not optional)")
+        (is (every? #(and (vector? %) (map? (second %)) (:optional (second %))) other-fields)
+            "All non-ID fields are optional")))))
 
 ;; T010: Test deriving delete input schema (ID only)
 (deftest derive-delete-input-schema-test

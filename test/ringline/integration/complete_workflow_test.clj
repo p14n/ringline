@@ -170,8 +170,13 @@
           schemas {:user fixtures/user-with-mutations-schema}
           framework (core/init-framework schemas {})
 
-          ;; Create individual mutation resolver
-          mock-db-conn nil  ; Mock connection for testing
+          ;; Create individual mutation resolver with mock connection
+          mock-db-conn {:type :mock-connection
+                       :transact-fn (fn [tx-data]
+                                     {:db-before {}
+                                      :db-after {}
+                                      :tx-data tx-data
+                                      :tempids {}})}
           create-resolver (core/create-mutation-resolver
                           :user
                           :create
@@ -188,11 +193,11 @@
                          :created-at 1234567890}}
             result (create-resolver context args nil)]
 
-        ;; Verify result structure
+        ;; Verify result structure - mutation resolvers return entity data for GraphQL
         (is (map? result) "Result is a map")
-        (is (contains? result :success) "Has success field")
-        (is (contains? result :operation) "Has operation field")
-        (is (= :create (:operation result)) "Operation is :create"))))
+        (is (contains? result :id) "Has id field (generated UUID)")
+        (is (contains? result :username) "Has username field")
+        (is (= "alice" (:username result)) "Username matches input"))))
 
   (testing "Attach mutation resolvers to schema"
     (let [;; Initialize framework
