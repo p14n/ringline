@@ -1,0 +1,92 @@
+;; Contract: Mutation Parser
+;; Namespace: ringline.mutation.parser
+;; Purpose: Parse mutation definitions from Malli schemas
+
+{:contract/name "Mutation Parser"
+ :contract/version "1.0.0"
+ :contract/namespace 'ringline.mutation.parser
+
+ :functions
+ [{:name 'parse-mutations
+   :doc "Extract mutation definitions from entity schema properties.
+         Returns a map of mutation definitions keyed by operation type."
+   :args [{:name 'entity-type
+           :type :keyword
+           :doc "The entity type (e.g., :user, :post)"}
+          {:name 'schema
+           :type :malli-schema
+           :doc "The Malli schema for the entity"}]
+   :returns {:type :map
+             :schema [:map
+                      [:entity-type :keyword]
+                      [:operations [:set [:enum :create :update :delete]]]
+                      [:create-schema {:optional true} :any]
+                      [:update-schema {:optional true} :any]
+                      [:delete-schema {:optional true} :any]]
+             :doc "Map containing entity type, allowed operations, and input schemas"}
+   :examples [{:input {:entity-type :user
+                       :schema [:map
+                                {:ringline/mutations #{:create :update :delete}}
+                                [:id :uuid]
+                                [:username :string]
+                                [:email :string]]}
+               :output {:entity-type :user
+                        :operations #{:create :update :delete}
+                        :create-schema [:map [:username :string] [:email :string]]
+                        :update-schema [:map [:username {:optional true} :string]
+                                             [:email {:optional true} :string]]
+                        :delete-schema [:map [:id :uuid]]}}]
+   :errors [{:type :invalid-schema
+             :when "Schema is not a valid Malli schema"
+             :example "Schema must be a vector starting with :map"}
+            {:type :invalid-operation
+             :when "Mutation operation is not :create, :update, or :delete"
+             :example "Only :create, :update, :delete are supported"}]}
+
+  {:name 'derive-input-schema
+   :doc "Derive input schema for a specific mutation operation from entity schema.
+         Create: all required fields, Update: all optional fields, Delete: just ID"
+   :args [{:name 'entity-schema
+           :type :malli-schema
+           :doc "The entity's Malli schema"}
+          {:name 'operation
+           :type [:enum :create :update :delete]
+           :doc "The mutation operation type"}]
+   :returns {:type :malli-schema
+             :doc "Input schema for the specified operation"}
+   :examples [{:input {:entity-schema [:map [:id :uuid] [:username :string] [:email :string]]
+                       :operation :create}
+               :output [:map [:username :string] [:email :string]]}
+              {:input {:entity-schema [:map [:id :uuid] [:username :string] [:email :string]]
+                       :operation :update}
+               :output [:map [:username {:optional true} :string]
+                             [:email {:optional true} :string]]}
+              {:input {:entity-schema [:map [:id :uuid] [:username :string]]
+                       :operation :delete}
+               :output [:map [:id :uuid]]}]}
+
+  {:name 'get-mutation-property
+   :doc "Extract :ringline/mutations property from schema, returns empty set if not present"
+   :args [{:name 'schema
+           :type :malli-schema
+           :doc "The Malli schema"}]
+   :returns {:type [:set [:enum :create :update :delete]]
+             :doc "Set of allowed mutation operations"}
+   :examples [{:input {:schema [:map {:ringline/mutations #{:create :update}} [:id :uuid]]}
+               :output #{:create :update}}
+              {:input {:schema [:map [:id :uuid]]}
+               :output #{}}]}]
+
+ :dependencies ['malli.core
+                'ringline.schema.parser]
+
+ :test-requirements
+ ["Test parsing schema with all mutation types"
+  "Test parsing schema with subset of mutations"
+  "Test parsing schema with no mutations property"
+  "Test deriving create input schema (required fields only)"
+  "Test deriving update input schema (all fields optional)"
+  "Test deriving delete input schema (ID only)"
+  "Test handling invalid schema format"
+  "Test handling invalid operation type"]}
+

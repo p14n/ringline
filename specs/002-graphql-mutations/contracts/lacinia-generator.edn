@@ -1,0 +1,133 @@
+;; Contract: Lacinia Mutation Schema Generator
+;; Namespace: ringline.mutation.lacinia
+;; Purpose: Generate Lacinia GraphQL mutation schemas from parsed mutation definitions
+
+{:contract/name "Lacinia Mutation Schema Generator"
+ :contract/version "1.0.0"
+ :contract/namespace 'ringline.mutation.lacinia
+
+ :functions
+ [{:name 'generate-mutation-schemas
+   :doc "Generate Lacinia mutation schema from parsed mutation definitions.
+         Returns a map suitable for merging into Lacinia schema's :mutations key."
+   :args [{:name 'parsed-mutations
+           :type :map
+           :doc "Map of entity-type to parsed mutation definitions"}]
+   :returns {:type :map
+             :doc "Lacinia mutation schema map with mutation fields and input types"}
+   :examples [{:input {:parsed-mutations
+                       {:user {:entity-type :user
+                               :operations #{:create :update :delete}
+                               :create-schema [:map [:username :string] [:email :string]]
+                               :update-schema [:map [:username {:optional true} :string]
+                                                    [:email {:optional true} :string]]
+                               :delete-schema [:map [:id :uuid]]}}}
+               :output {:mutations
+                        {:createUser {:type :User
+                                      :args {:input {:type :CreateUserInput}}
+                                      :description "Create a new User"}
+                         :updateUser {:type :User
+                                      :args {:id {:type '(non-null ID)}
+                                             :input {:type :UpdateUserInput}}
+                                      :description "Update an existing User"}
+                         :deleteUser {:type :DeleteResult
+                                      :args {:id {:type '(non-null ID)}}
+                                      :description "Delete a User"}}
+                        :input-objects
+                        {:CreateUserInput {:fields {:username {:type '(non-null String)}
+                                                    :email {:type '(non-null String)}}}
+                         :UpdateUserInput {:fields {:username {:type 'String}
+                                                    :email {:type 'String}}}}
+                        :objects
+                        {:DeleteResult {:fields {:success {:type '(non-null Boolean)}
+                                                 :id {:type 'ID}}}}}}]}
+
+  {:name 'generate-mutation-field
+   :doc "Generate a single Lacinia mutation field definition"
+   :args [{:name 'entity-type
+           :type :keyword
+           :doc "The entity type"}
+          {:name 'operation
+           :type [:enum :create :update :delete]
+           :doc "The mutation operation"}
+          {:name 'input-schema
+           :type :malli-schema
+           :doc "The input schema for this operation"}]
+   :returns {:type :map
+             :doc "Lacinia mutation field definition"}
+   :examples [{:input {:entity-type :user
+                       :operation :create
+                       :input-schema [:map [:username :string] [:email :string]]}
+               :output {:type :User
+                        :args {:input {:type :CreateUserInput}}
+                        :description "Create a new User"}}]}
+
+  {:name 'generate-input-object
+   :doc "Generate Lacinia input object type from Malli schema"
+   :args [{:name 'entity-type
+           :type :keyword
+           :doc "The entity type"}
+          {:name 'operation
+           :type [:enum :create :update :delete]
+           :doc "The mutation operation"}
+          {:name 'input-schema
+           :type :malli-schema
+           :doc "The Malli input schema"}]
+   :returns {:type :map
+             :doc "Lacinia input object definition"}
+   :examples [{:input {:entity-type :user
+                       :operation :create
+                       :input-schema [:map [:username :string] [:email :string]]}
+               :output {:fields {:username {:type '(non-null String)}
+                                 :email {:type '(non-null String)}}}}]}
+
+  {:name 'mutation-name
+   :doc "Generate GraphQL mutation name from entity type and operation"
+   :args [{:name 'entity-type
+           :type :keyword
+           :doc "The entity type"}
+          {:name 'operation
+           :type [:enum :create :update :delete]
+           :doc "The mutation operation"}]
+   :returns {:type :keyword
+             :doc "The mutation field name"}
+   :examples [{:input {:entity-type :user :operation :create}
+               :output :createUser}
+              {:input {:entity-type :blog-post :operation :update}
+               :output :updateBlogPost}
+              {:input {:entity-type :user :operation :delete}
+               :output :deleteUser}]}
+
+  {:name 'input-type-name
+   :doc "Generate GraphQL input type name from entity type and operation"
+   :args [{:name 'entity-type
+           :type :keyword
+           :doc "The entity type"}
+          {:name 'operation
+           :type [:enum :create :update :delete]
+           :doc "The mutation operation"}]
+   :returns {:type :keyword
+             :doc "The input type name"}
+   :examples [{:input {:entity-type :user :operation :create}
+               :output :CreateUserInput}
+              {:input {:entity-type :blog-post :operation :update}
+               :output :UpdateBlogPostInput}]}]
+
+ :dependencies ['com.walmartlabs.lacinia
+                'malli.core
+                'ringline.schema.lacinia
+                'ringline.mutation.parser]
+
+ :test-requirements
+ ["Test generating mutations for entity with all operations"
+  "Test generating mutations for entity with subset of operations"
+  "Test mutation naming conventions (camelCase)"
+  "Test input type naming conventions (PascalCase + Input suffix)"
+  "Test create mutation with required fields"
+  "Test update mutation with optional fields"
+  "Test delete mutation with ID argument"
+  "Test input object generation from Malli schema"
+  "Test type mapping (Malli → GraphQL)"
+  "Test handling multiple entities"
+  "Test merging with existing Lacinia schema"]}
+
