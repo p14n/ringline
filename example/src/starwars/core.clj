@@ -96,87 +96,21 @@
   [schema query-string conn]
   (lacinia/execute schema query-string nil {:conn conn}))
 
-;; Example queries
-(defn example-queries
-  "Run example queries to demonstrate the system"
-  []
-  ;; Create and initialize Datomic database
-  (let [conn (create-database!)
-        schema (create-schema conn)]
-    (println "\n=== Creating GraphQL Schema ===")
-    (println "Schema created successfully")
-
-    (println "\n=== Example Query: Search User by Email ===")
-    (let [result (execute-query schema
-                               "{ user(email: \"alice@example.com\") { id name email age } }"
-                               conn)]
-      (pprint/pprint result))
-
-    (println "\n=== Example Query: Search User by Name ===")
-    (let [result (execute-query schema
-                               "{ user(name: \"Bob Smith\") { id name email age } }"
-                               conn)]
-      (pprint/pprint result))
-
-    (println "\n=== Example Mutation: Create New User ===")
-    (let [result (execute-query schema
-                               "mutation {
-                                  createUser(input: {
-                                    name: \"Diana Prince\"
-                                    email: \"diana@example.com\"
-                                    age: 28
-                                  }) {
-                                    id
-                                    name
-                                    email
-                                    age
-                                  }
-                                }"
-                               conn)]
-      (pprint/pprint result))
-
-    (println "\n=== Example Mutation: Update User ===")
-    (let [result (execute-query schema
-                               "mutation {
-                                  updateUser(input: {
-                                    id: \"00000000-0000-0000-0000-000000000002\"
-                                    age: 26
-                                  }) {
-                                    id
-                                    name
-                                    email
-                                    age
-                                  }
-                                }"
-                               conn)]
-      (pprint/pprint result))
-
-    (println "\n=== Verify Update: Query Updated User ===")
-    (let [result (execute-query schema
-                               "{ user(email: \"bob@example.com\") { id name email age } }"
-                               conn)]
-      (pprint/pprint result))
-
-    (println "\n=== Example Mutation: Delete User ===")
-    (let [result (execute-query schema
-                               "mutation {
-                                  deleteUser(input: {
-                                    id: \"00000000-0000-0000-0000-000000000003\"
-                                  })
-                                }"
-                               conn)]
-      (pprint/pprint result))
-
-    (println "\n=== All Examples Complete ===\n")
-
-    ;; Clean up
-    (d/release conn)
-    (d/delete-database db-uri)))
-
 (defn -main
   "Main entry point for the example"
   [& args]
-  (example-queries))
+  (println "\n=== Ringline User CRUD Example ===\n")
+  (println "This example demonstrates the Ringline framework with Datomic.")
+  (println "")
+  (println "To see the framework in action, run the tests:")
+  (println "  # Run example tests only:")
+  (println "  clojure -M:test --focus :example")
+  (println "")
+  (println "  # Run all framework tests (including example):")
+  (println "  clojure -M:test")
+  (println "")
+  (println "Or explore the code in the REPL using the examples in the comment block below.")
+  (println ""))
 
 (comment
   ;; REPL examples
