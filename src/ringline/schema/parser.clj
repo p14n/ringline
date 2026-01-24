@@ -142,6 +142,46 @@
                        :errors (m/explain ParsedSchema result)})))
     result))
 
+;; Rich comment block with REPL examples
+(comment
+  ;; Example: Parse a single Malli schema
+  (require '[ringline.schema.parser :as parser])
+  (require '[malli.core :as m])
+
+  (def user-schema
+    [:map {:ringline/datomic-ns "user"
+           :ringline/query-root true
+           :ringline/searchable [:email]}
+     [:id :uuid]
+     [:email :string]
+     [:username :string]
+     [:posts [:vector :ref]]])
+
+  (def parsed (parser/parse-schema :user user-schema))
+
+  ;; Inspect parsed result
+  (:schema-name parsed)     ; => :user
+  (:fields parsed)          ; => Vector of field definitions
+  (:properties parsed)      ; => {:ringline/datomic-ns "user" ...}
+  (:relationships parsed)   ; => Vector of relationships
+
+  ;; Example: Parse multiple schemas with relationships
+  (def post-schema
+    [:map {:ringline/datomic-ns "post"}
+     [:id :uuid]
+     [:title :string]
+     [:author :ref]])
+
+  (def schemas {:user user-schema :post post-schema})
+  (def parsed-all (parser/parse-schemas schemas))
+
+  ;; Inspect relationships
+  (mapcat :relationships parsed-all)
+  ; => [{:field :posts :source :user :target :post :cardinality :many ...}
+  ;     {:field :author :source :post :target :user :cardinality :one ...}]
+
+  )
+
 (defn- resolve-relationship-target
   "Resolve the target entity for a relationship based on field name"
   [relationship schema-names]

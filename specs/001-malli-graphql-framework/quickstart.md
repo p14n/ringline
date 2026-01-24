@@ -18,27 +18,29 @@ Define your entities using Malli schemas with custom properties:
 (def User
   [:map
    {:ringline/datomic-ns "user"
-    :ringline/query-root true}
-   [:user/id [:uuid {:ringline/unique :identity}]]
-   [:user/email [:string {:ringline/searchable true}]]
-   [:user/name :string]
-   [:user/posts [:vector :ref]]])
+    :ringline/query-root true
+    :ringline/searchable [:email]}
+   [:id :uuid]
+   [:email :string]
+   [:name :string]
+   [:posts [:vector :ref]]])
 
 ;; Define Post entity
 (def Post
   [:map
    {:ringline/datomic-ns "post"
-    :ringline/query-root true}
-   [:post/id [:uuid {:ringline/unique :identity}]]
-   [:post/title [:string {:ringline/searchable true}]]
-   [:post/content :string]
-   [:post/created-at :inst]
-   [:post/author :ref]])
+    :ringline/query-root true
+    :ringline/searchable [:title]}
+   [:id :uuid]
+   [:title :string]
+   [:content :string]
+   [:created-at :inst]
+   [:author :ref]])
 
 ;; Define the complete schema map
 (def schemas
-  {:User User
-   :Post Post})
+  {:user User
+   :post Post})
 ```
 
 ## Step 2: Initialize the Framework
@@ -50,10 +52,7 @@ Generate both Datomic and Lacinia schemas:
 
 ;; Initialize framework with your schemas
 (def framework-data
-  (ringline/init-framework
-    schemas
-    {:datomic-ns-prefix "app"
-     :graphql-naming :camelCase}))
+  (ringline/init-framework schemas {}))
 
 ;; Extract generated schemas
 (def datomic-schema (:datomic framework-data))
@@ -73,8 +72,12 @@ Use the generated Datomic schema to create your database:
 (d/create-database db-uri)
 (def conn (d/connect db-uri))
 
+;; Convert to transaction format
+(require '[ringline.schema.datomic :as datomic-gen])
+(def tx-data (mapcat datomic-gen/schema->transaction datomic-schema))
+
 ;; Transact the generated schema
-@(d/transact conn datomic-schema)
+@(d/transact conn tx-data)
 
 ;; Now you can transact data
 @(d/transact conn
@@ -91,13 +94,14 @@ Create resolvers and compile the Lacinia schema:
 (require '[com.walmartlabs.lacinia :as lacinia]
          '[ringline.core :as ringline])
 
+;; Get parsed schemas for each entity
+(def parsed-user (first (filter #(= :user (:schema-name %)) parsed-schemas)))
+(def parsed-post (first (filter #(= :post (:schema-name %)) parsed-schemas)))
+
 ;; Create resolvers using framework helpers
 (def resolvers
-  {:resolve-user
-   (ringline/create-resolver :User conn (first parsed-schemas))
-   
-   :resolve-users
-   (ringline/create-resolver :User conn (first parsed-schemas))})
+  {:resolve-user (ringline/create-resolver :User conn parsed-user)
+   :resolve-post (ringline/create-resolver :Post conn parsed-post)})
 
 ;; Attach resolvers to schema
 (def compiled-schema

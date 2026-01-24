@@ -139,24 +139,24 @@
 
 ### Tests for User Story 4 (TDD - Write FIRST, ensure FAIL)
 
-- [ ] T046 [P] [US4] Contract test for build-query-context function in test/ringline/query/converter_test.clj
-- [ ] T047 [P] [US4] Contract test for graphql->pull function in test/ringline/query/converter_test.clj
-- [ ] T048 [P] [US4] Contract test for pull-with-args function in test/ringline/query/converter_test.clj
-- [ ] T049 [P] [US4] Integration test for end-to-end query conversion in test/ringline/integration/query_execution_test.clj
+- [x] T046 [P] [US4] Contract test for build-query-context function in test/ringline/query/converter_test.clj
+- [x] T047 [P] [US4] Contract test for graphql->pull function in test/ringline/query/converter_test.clj
+- [x] T048 [P] [US4] Contract test for pull-with-args function in test/ringline/query/converter_test.clj
+- [x] T049 [P] [US4] Integration test for end-to-end query conversion in test/ringline/integration/query_execution_test.clj
 
 ### Implementation for User Story 4
 
-- [ ] T050 [US4] Implement build-query-context function in src/ringline/query/converter.clj (extract selections from Lacinia context)
-- [ ] T051 [US4] Implement field selection extraction in src/ringline/query/converter.clj (parse GraphQL field selections)
-- [ ] T052 [US4] Implement nested query detection in src/ringline/query/converter.clj (identify relationship traversals)
-- [ ] T053 [US4] Implement pull pattern generation in src/ringline/query/converter.clj (convert selections to Datomic pull syntax)
-- [ ] T054 [US4] Implement nested pull pattern generation in src/ringline/query/converter.clj (handle nested relationships)
-- [ ] T055 [US4] Implement graphql->pull function in src/ringline/query/converter.clj (QueryContext → PullPattern)
-- [ ] T056 [US4] Implement argument extraction in src/ringline/query/converter.clj (extract GraphQL query arguments)
-- [ ] T057 [US4] Implement where clause generation in src/ringline/query/converter.clj (convert arguments to Datomic query clauses)
-- [ ] T058 [US4] Implement pull-with-args function in src/ringline/query/converter.clj (combine pull pattern with where clauses)
-- [ ] T059 [US4] Add Malli validation for PullPattern output in src/ringline/query/converter.clj
-- [ ] T060 [US4] Verify all tests pass for User Story 4
+- [x] T050 [US4] Implement build-query-context function in src/ringline/query/converter.clj (extract selections from Lacinia context)
+- [x] T051 [US4] Implement field selection extraction in src/ringline/query/converter.clj (parse GraphQL field selections)
+- [x] T052 [US4] Implement nested query detection in src/ringline/query/converter.clj (identify relationship traversals)
+- [x] T053 [US4] Implement pull pattern generation in src/ringline/query/converter.clj (convert selections to Datomic pull syntax)
+- [x] T054 [US4] Implement nested pull pattern generation in src/ringline/query/converter.clj (handle nested relationships)
+- [x] T055 [US4] Implement graphql->pull function in src/ringline/query/converter.clj (QueryContext → PullPattern)
+- [x] T056 [US4] Implement argument extraction in src/ringline/query/converter.clj (extract GraphQL query arguments)
+- [x] T057 [US4] Implement where clause generation in src/ringline/query/converter.clj (convert arguments to Datomic query clauses)
+- [x] T058 [US4] Implement pull-with-args function in src/ringline/query/converter.clj (combine pull pattern with where clauses)
+- [x] T059 [US4] Add Malli validation for PullPattern output in src/ringline/query/converter.clj
+- [x] T060 [US4] Verify all tests pass for User Story 4
 
 **Checkpoint**: At this point, User Stories 1-4 work - can convert GraphQL queries to Datomic pull patterns
 
@@ -170,22 +170,22 @@
 
 ### Tests for User Story 5 (TDD - Write FIRST, ensure FAIL)
 
-- [ ] T061 [P] [US5] Contract test for datomic->graphql function in test/ringline/response/transformer_test.clj
-- [ ] T062 [P] [US5] Contract test for entities->graphql function in test/ringline/response/transformer_test.clj
-- [ ] T063 [P] [US5] Contract test for transform-with-selections function in test/ringline/response/transformer_test.clj
-- [ ] T064 [P] [US5] Integration test for end-to-end response transformation in test/ringline/integration/query_execution_test.clj
+- [x] T061 [P] [US5] Contract test for datomic->graphql function in test/ringline/response/transformer_test.clj
+- [x] T062 [P] [US5] Contract test for entities->graphql function in test/ringline/response/transformer_test.clj
+- [x] T063 [P] [US5] Contract test for transform-with-selections function in test/ringline/response/transformer_test.clj
+- [x] T064 [P] [US5] Integration test for end-to-end response transformation in test/ringline/integration/query_execution_test.clj
 
 ### Implementation for User Story 5
 
-- [ ] T065 [US5] Implement field name transformation in src/ringline/response/transformer.clj (Datomic keywords → GraphQL field names)
-- [ ] T066 [US5] Implement type coercion in src/ringline/response/transformer.clj (Datomic types → GraphQL types)
-- [ ] T067 [US5] Implement relationship resolution in src/ringline/response/transformer.clj (resolve :db/id refs to nested entities)
-- [ ] T068 [US5] Implement null handling in src/ringline/response/transformer.clj (respect GraphQL schema nullability)
-- [ ] T069 [US5] Implement datomic->graphql function in src/ringline/response/transformer.clj (single entity transformation)
-- [ ] T070 [US5] Implement entities->graphql function in src/ringline/response/transformer.clj (list of entities transformation)
-- [ ] T071 [US5] Implement transform-with-selections function in src/ringline/response/transformer.clj (filter by QueryContext selections)
-- [ ] T072 [US5] Add Malli validation for transformed output in src/ringline/response/transformer.clj
-- [ ] T073 [US5] Verify all tests pass for User Story 5
+- [x] T065 [US5] Implement field name transformation in src/ringline/response/transformer.clj (Datomic keywords → GraphQL field names)
+- [x] T066 [US5] Implement type coercion in src/ringline/response/transformer.clj (Datomic types → GraphQL types)
+- [x] T067 [US5] Implement relationship resolution in src/ringline/response/transformer.clj (resolve :db/id refs to nested entities)
+- [x] T068 [US5] Implement null handling in src/ringline/response/transformer.clj (respect GraphQL schema nullability)
+- [x] T069 [US5] Implement datomic->graphql function in src/ringline/response/transformer.clj (single entity transformation)
+- [x] T070 [US5] Implement entities->graphql function in src/ringline/response/transformer.clj (list of entities transformation)
+- [x] T071 [US5] Implement transform-with-selections function in src/ringline/response/transformer.clj (filter by QueryContext selections)
+- [x] T072 [US5] Add Malli validation for transformed output in src/ringline/response/transformer.clj
+- [x] T073 [US5] Verify all tests pass for User Story 5
 
 **Checkpoint**: All 5 user stories complete - full query execution flow works end-to-end
 
@@ -197,17 +197,17 @@
 
 ### Tests for Integration (TDD - Write FIRST, ensure FAIL)
 
-- [ ] T074 [P] Contract test for init-framework function in test/ringline/core_test.clj
-- [ ] T075 [P] Contract test for create-resolver function in test/ringline/core_test.clj
-- [ ] T076 Integration test for complete workflow (Malli → Datomic + Lacinia → Query → Response) in test/ringline/integration/complete_workflow_test.clj
+- [x] T074 [P] Contract test for init-framework function in test/ringline/core_test.clj
+- [x] T075 [P] Contract test for create-resolver function in test/ringline/core_test.clj
+- [x] T076 Integration test for complete workflow (Malli → Datomic + Lacinia → Query → Response) in test/ringline/integration/complete_workflow_test.clj
 
 ### Implementation for Integration
 
-- [ ] T077 Implement init-framework function in src/ringline/core.clj (orchestrate parse + generate Datomic + generate Lacinia)
-- [ ] T078 Implement create-resolver function in src/ringline/core.clj (create Lacinia resolver using query converter + response transformer)
-- [ ] T079 Add comprehensive error handling across all namespaces
-- [ ] T080 Add logging for framework operations (schema generation, query conversion, response transformation)
-- [ ] T081 Verify all integration tests pass
+- [x] T077 Implement init-framework function in src/ringline/core.clj (orchestrate parse + generate Datomic + generate Lacinia)
+- [x] T078 Implement create-resolver function in src/ringline/core.clj (create Lacinia resolver using query converter + response transformer)
+- [x] T079 Add comprehensive error handling across all namespaces
+- [x] T080 Add logging for framework operations (schema generation, query conversion, response transformation)
+- [x] T081 Verify all integration tests pass
 
 **Checkpoint**: Complete framework ready for use
 
@@ -217,15 +217,15 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T082 [P] Add rich comment blocks with REPL examples to all namespaces
-- [ ] T083 [P] Add docstrings to all public functions
-- [ ] T084 [P] Validate quickstart.md examples work correctly
-- [ ] T085 Code cleanup and refactoring for consistency
-- [ ] T086 Performance optimization for schema generation (target: <1s for 50 entities)
-- [ ] T087 Performance optimization for query conversion (target: <10ms per query)
-- [ ] T088 [P] Add edge case handling (unsupported types, circular relationships, missing fields)
-- [ ] T089 Security review for query injection vulnerabilities
-- [ ] T090 Run full test suite with Kaocha and verify 100% pass rate
+- [x] T082 [P] Add rich comment blocks with REPL examples to all namespaces
+- [x] T083 [P] Add docstrings to all public functions
+- [x] T084 [P] Validate quickstart.md examples work correctly
+- [x] T085 Code cleanup and refactoring for consistency
+- [x] T086 Performance optimization for schema generation (target: <1s for 50 entities)
+- [x] T087 Performance optimization for query conversion (target: <10ms per query)
+- [x] T088 [P] Add edge case handling (unsupported types, circular relationships, missing fields)
+- [x] T089 Security review for query injection vulnerabilities
+- [x] T090 Run full test suite with Kaocha and verify 100% pass rate
 
 ---
 
