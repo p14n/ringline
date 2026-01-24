@@ -1,12 +1,13 @@
 (ns starwars.core-test
-  "Integration tests for User CRUD operations via HTTP GraphQL server.
+  "Integration tests for Star Wars queries via HTTP GraphQL server.
 
    These tests demonstrate the complete workflow:
    - Malli schemas as single source of truth
    - Automatic Datomic schema generation
    - Automatic GraphQL schema generation
-   - Automatic CRUD mutations (create, update, delete)
-   - Query resolvers with searchable fields
+   - Enum support (Episode)
+   - Multiple entity types (Human, Droid)
+   - Custom query resolvers
    - Real Datomic in-memory database
    - HTTP server with Ring, Reitit, and Jetty
    - GraphQL over HTTP with JSON"
@@ -50,98 +51,61 @@
 (use-fixtures :once server-fixture)
 
 (deftest example-test
-  (testing "Query user by email returns correct user with all fields"
-    (let [result (graphql-request "{ user(email: \"alice@example.com\") { id name email age } }")]
+  (testing "Query for human with default ID returns Darth Vader"
+    (let [result (graphql-request "{ human { id name home_planet } }")]
       (is (nil? (:errors result)) "No errors in response")
-      (is (= "00000000-0000-0000-0000-000000000001"
-             (get-in result [:data :user :id]))
-          "Returns correct user ID")
-      (is (= "Alice Johnson"
-             (get-in result [:data :user :name]))
-          "Returns correct name")
-      (is (= "alice@example.com"
-             (get-in result [:data :user :email]))
-          "Returns correct email")
-      (is (= 30
-             (get-in result [:data :user :age]))
-          "Returns correct age")))
+      (is (= "1001"
+             (get-in result [:data :human :id]))
+          "Returns Vader's ID")
+      (is (= "Darth Vader"
+             (get-in result [:data :human :name]))
+          "Returns Vader's name")
+      (is (= "Tatooine"
+             (get-in result [:data :human :home_planet]))
+          "Returns Vader's home planet")))
 
-  (testing "Query user by name returns correct user with all fields"
-    (let [result (graphql-request "{ user(name: \"Bob Smith\") { id name email age } }")]
+  (testing "Query for human by ID returns Luke Skywalker with all fields"
+    (let [result (graphql-request "{ human(id: \"1000\") { id name home_planet appears_in } }")]
       (is (nil? (:errors result)) "No errors in response")
-      (is (= "00000000-0000-0000-0000-000000000002"
-             (get-in result [:data :user :id]))
-          "Returns correct user ID")
-      (is (= "Bob Smith"
-             (get-in result [:data :user :name]))
-          "Returns correct name")
-      (is (= "bob@example.com"
-             (get-in result [:data :user :email]))
-          "Returns correct email")
-      (is (= 25
-             (get-in result [:data :user :age]))
-          "Returns correct age")))
+      (is (= "1000"
+             (get-in result [:data :human :id]))
+          "Returns Luke's ID")
+      (is (= "Luke Skywalker"
+             (get-in result [:data :human :name]))
+          "Returns Luke's name")
+      (is (= "Tatooine"
+             (get-in result [:data :human :home_planet]))
+          "Returns Luke's home planet")
+      (is (= ["EMPIRE" "JEDI" "NEWHOPE"]
+             (sort (get-in result [:data :human :appears_in])))
+          "Returns episodes Luke appears in (sorted)")))
 
-  (testing "Create mutation creates new user with generated UUID"
-    (let [result (graphql-request "mutation {
-                                      createUser(input: {
-                                        name: \"Diana Prince\"
-                                        email: \"diana@example.com\"
-                                        age: 28
-                                      }) {
-                                        id
-                                        name
-                                        email
-                                        age
-                                      }
-                                    }")]
+  (testing "Query for droid with default ID returns C-3PO"
+    (let [result (graphql-request "{ droid { id name primary_function } }")]
       (is (nil? (:errors result)) "No errors in response")
-      (is (some? (get-in result [:data :createUser :id]))
-          "Returns generated UUID")
-      (is (= "Diana Prince"
-             (get-in result [:data :createUser :name]))
-          "Returns correct name")
-      (is (= "diana@example.com"
-             (get-in result [:data :createUser :email]))
-          "Returns correct email")
-      (is (= 28
-             (get-in result [:data :createUser :age]))
-          "Returns correct age")))
+      (is (= "2001"
+             (get-in result [:data :droid :id]))
+          "Returns C-3PO's ID")
+      (is (= "C-3PO"
+             (get-in result [:data :droid :name]))
+          "Returns C-3PO's name")
+      (is (= "Protocol"
+             (get-in result [:data :droid :primary_function]))
+          "Returns C-3PO's primary function")))
 
-  (testing "Update mutation updates user age and returns updated entity"
-    (let [result (graphql-request "mutation {
-                                      updateUser(input: {
-                                        id: \"00000000-0000-0000-0000-000000000002\"
-                                        age: 26
-                                      }) {
-                                        id
-                                        name
-                                        email
-                                        age
-                                      }
-                                    }")]
+  (testing "Query for droid by ID returns R2-D2 with all fields"
+    (let [result (graphql-request "{ droid(id: \"2000\") { id name primary_function appears_in } }")]
       (is (nil? (:errors result)) "No errors in response")
-      (is (= "00000000-0000-0000-0000-000000000002"
-             (get-in result [:data :updateUser :id]))
-          "Returns correct user ID")
-      (is (= 26
-             (get-in result [:data :updateUser :age]))
-          "Returns updated age")
-
-      ;; Verify the update persisted
-      (let [verify-result (graphql-request "{ user(email: \"bob@example.com\") { id name email age } }")]
-        (is (= 26
-               (get-in verify-result [:data :user :age]))
-            "Update persisted in database"))))
-
-  (testing "Delete mutation deletes user and returns true"
-    (let [result (graphql-request "mutation {
-                                     deleteUser(input: {
-                                       id: \"00000000-0000-0000-0000-000000000003\"
-                                     })
-                                   }")]
-      (is (nil? (:errors result)) "No errors in response")
-      (is (= true
-             (get-in result [:data :deleteUser]))
-          "Returns true on successful delete"))))
+      (is (= "2000"
+             (get-in result [:data :droid :id]))
+          "Returns R2-D2's ID")
+      (is (= "R2-D2"
+             (get-in result [:data :droid :name]))
+          "Returns R2-D2's name")
+      (is (= "Astromech"
+             (get-in result [:data :droid :primary_function]))
+          "Returns R2-D2's primary function")
+      (is (= ["EMPIRE" "JEDI" "NEWHOPE"]
+             (sort (get-in result [:data :droid :appears_in])))
+          "Returns episodes R2-D2 appears in (sorted)"))))
 

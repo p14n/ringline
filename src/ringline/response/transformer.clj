@@ -47,6 +47,10 @@
     (and (vector? value) (every? map? value))
     (mapv #(transform-entity % parsed-schema) value)
 
+    ;; Vector of keywords (enum array)
+    (and (vector? value) (every? keyword? value))
+    (mapv scalars/serialize-enum value)
+
     ;; Single entity (one relationship)
     (and (map? value) (some namespace (keys value)))
     (transform-entity value parsed-schema)
