@@ -113,37 +113,36 @@
       (is (= (:objects schema) (:objects result)) "Schema structure preserved"))))
 
 ;; ============================================================================
-;; T015: generate-custom-query-schema Tests (TDD - Write FIRST, ensure FAIL)
+;; T015: generate-custom-query-schema Tests (NEW API - name passed separately)
 ;; ============================================================================
 
 (deftest generate-custom-query-schema-test
   (testing "generate-custom-query-schema converts CustomQueryDefinition to Lacinia query schema"
-    (let [custom-query {:name :searchUsers
-                        :args [:map [:query :string] [:limit {:optional true} :int]]
-                        :return-type :User
-                        :description "Search users by query string"}
-          result (lacinia/generate-custom-query-schema custom-query)]
+    (let [query-name :searchUsers
+          query-def {:args [:map [:query :string] [:limit {:optional true} :int]]
+                     :return-type :User
+                     :description "Search users by query string"}
+          result (lacinia/generate-custom-query-schema query-name query-def)]
       (is (map? result) "Returns a map")
-      (is (contains? result :searchUsers) "Has query name as key")
-      (is (= :User (get-in result [:searchUsers :type])) "Has correct return type")
-      (is (map? (get-in result [:searchUsers :args])) "Has args map")
-      (is (= "Search users by query string" (get-in result [:searchUsers :description])) "Has description")))
+      (is (= :User (:type result)) "Has correct return type")
+      (is (map? (:args result)) "Has args map")
+      (is (= "Search users by query string" (:description result)) "Has description")))
 
   (testing "generate-custom-query-schema handles query without description"
-    (let [custom-query {:name :getActiveUsers
-                        :args [:map]
-                        :return-type :User}
-          result (lacinia/generate-custom-query-schema custom-query)]
-      (is (contains? result :getActiveUsers) "Has query name")
-      (is (nil? (get-in result [:getActiveUsers :description])) "No description when not provided")))
+    (let [query-name :getActiveUsers
+          query-def {:args [:map]
+                     :return-type :User}
+          result (lacinia/generate-custom-query-schema query-name query-def)]
+      (is (map? result) "Returns a map")
+      (is (nil? (:description result)) "No description when not provided")))
 
   (testing "generate-custom-query-schema adds placeholder resolver"
-    (let [custom-query {:name :searchUsers
-                        :args [:map [:query :string]]
-                        :return-type :User}
-          result (lacinia/generate-custom-query-schema custom-query)]
-      (is (some? (get-in result [:searchUsers :resolve])) "Has resolve function")
-      (is (= :custom-resolver-placeholder (get-in result [:searchUsers :resolve])) "Placeholder resolver added"))))
+    (let [query-name :searchUsers
+          query-def {:args [:map [:query :string]]
+                     :return-type :User}
+          result (lacinia/generate-custom-query-schema query-name query-def)]
+      (is (some? (:resolve result)) "Has resolve function")
+      (is (= :custom-resolver-placeholder (:resolve result)) "Placeholder resolver added"))))
 
 ;; ============================================================================
 ;; T016: malli-args->lacinia-args Tests (TDD - Write FIRST, ensure FAIL)
@@ -203,56 +202,57 @@
         "Throws on unrecognized type")))
 
 ;; ============================================================================
-;; T035: generate-custom-mutation-schema Tests (TDD - Write FIRST, ensure FAIL)
+;; T035: generate-custom-mutation-schema Tests (NEW API - name passed separately)
 ;; ============================================================================
 
 (deftest generate-custom-mutation-schema-test
   (testing "generate-custom-mutation-schema converts CustomMutationDefinition to Lacinia mutation schema"
-    (let [custom-mutation {:name :approveOrder
-                           :args [:map [:order-id :uuid] [:notes {:optional true} :string]]
-                           :return-type :Order
-                           :description "Approve an order with optional notes"}
-          result (lacinia/generate-custom-mutation-schema custom-mutation)]
+    (let [mutation-name :approveOrder
+          mutation-def {:args [:map [:order-id :uuid] [:notes {:optional true} :string]]
+                        :return-type :Order
+                        :description "Approve an order with optional notes"}
+          result (lacinia/generate-custom-mutation-schema mutation-name mutation-def)]
       (is (map? result) "Returns a map")
-      (is (contains? result :approveOrder) "Has mutation name as key")
-      (is (= :Order (get-in result [:approveOrder :type])) "Has correct return type")
-      (is (map? (get-in result [:approveOrder :args])) "Has args map")
-      (is (= "Approve an order with optional notes" (get-in result [:approveOrder :description])) "Has description")))
+      (is (= :Order (:type result)) "Has correct return type")
+      (is (map? (:args result)) "Has args map")
+      (is (= "Approve an order with optional notes" (:description result)) "Has description")))
 
   (testing "generate-custom-mutation-schema handles mutation without description"
-    (let [custom-mutation {:name :cancelOrder
-                           :args [:map [:order-id :uuid]]
-                           :return-type :Order}
-          result (lacinia/generate-custom-mutation-schema custom-mutation)]
-      (is (contains? result :cancelOrder) "Has mutation name")
-      (is (nil? (get-in result [:cancelOrder :description])) "No description when not provided")))
+    (let [mutation-name :cancelOrder
+          mutation-def {:args [:map [:order-id :uuid]]
+                        :return-type :Order}
+          result (lacinia/generate-custom-mutation-schema mutation-name mutation-def)]
+      (is (map? result) "Returns a map")
+      (is (nil? (:description result)) "No description when not provided")))
 
   (testing "generate-custom-mutation-schema adds placeholder resolver"
-    (let [custom-mutation {:name :approveOrder
-                           :args [:map [:order-id :uuid]]
-                           :return-type :Order}
-          result (lacinia/generate-custom-mutation-schema custom-mutation)]
-      (is (some? (get-in result [:approveOrder :resolve])) "Has resolve function")
-      (is (= :custom-resolver-placeholder (get-in result [:approveOrder :resolve])) "Placeholder resolver added"))))
+    (let [mutation-name :approveOrder
+          mutation-def {:args [:map [:order-id :uuid]]
+                        :return-type :Order}
+          result (lacinia/generate-custom-mutation-schema mutation-name mutation-def)]
+      (is (some? (:resolve result)) "Has resolve function")
+      (is (= :custom-resolver-placeholder (:resolve result)) "Placeholder resolver added"))))
 
 ;; ============================================================================
-;; T048-T049: Conflict Resolution Tests (TDD - Write FIRST, ensure FAIL)
+;; T048-T049: Conflict Resolution Tests (NEW API - root-level custom operations)
 ;; ============================================================================
 
 (deftest custom-query-overrides-auto-generated-test
   (testing "Custom query with same name as auto-generated query overrides it"
-    ;; Create a schema with both query-root (auto-generates :user query) and custom :user query
+    ;; Create a schema with query-root (auto-generates :user query)
     (let [user-schema [:map {:ringline/datomic-ns :user
                              :ringline/query-root true
-                             :ringline/searchable-fields [:username]
-                             :ringline/custom-query {:name :user  ; Same name as auto-generated
-                                                     :args [:map [:id :uuid]]
-                                                     :return-type :User
-                                                     :description "Custom user query"}}
+                             :ringline/searchable-fields [:username]}
                        [:id :uuid]
                        [:username :string]]
           parsed (parser/parse-schema :User user-schema)
-          lacinia-schema (lacinia/generate-schema parsed)]
+
+          ;; Define custom operation with same name as auto-generated
+          custom-operations {:queries {:user {:args [:map [:id :uuid]]
+                                              :return-type :User
+                                              :description "Custom user query"}}}
+
+          lacinia-schema (lacinia/generate-schemas [parsed] custom-operations)]
 
       ;; Verify only one :user query exists (custom overrides auto-generated)
       (is (contains? (:queries lacinia-schema) :user) "User query exists")
@@ -264,14 +264,16 @@
   (testing "Custom query with different name coexists with auto-generated query"
     (let [user-schema [:map {:ringline/datomic-ns :user
                              :ringline/query-root true
-                             :ringline/searchable-fields [:username]
-                             :ringline/custom-query {:name :searchUsers  ; Different name
-                                                     :args [:map [:query :string]]
-                                                     :return-type :User}}
+                             :ringline/searchable-fields [:username]}
                        [:id :uuid]
                        [:username :string]]
           parsed (parser/parse-schema :User user-schema)
-          lacinia-schema (lacinia/generate-schema parsed)]
+
+          ;; Define custom operation with different name
+          custom-operations {:queries {:searchUsers {:args [:map [:query :string]]
+                                                     :return-type :User}}}
+
+          lacinia-schema (lacinia/generate-schemas [parsed] custom-operations)]
 
       ;; Both queries should exist
       (is (contains? (:queries lacinia-schema) :user) "Auto-generated :user query exists")
@@ -282,14 +284,16 @@
   (testing "Schema with both auto-generated queries and custom mutations"
     (let [order-schema [:map {:ringline/datomic-ns :order
                               :ringline/query-root true
-                              :ringline/searchable-fields [:status]
-                              :ringline/custom-mutation {:name :approveOrder
-                                                         :args [:map [:order-id :uuid]]
-                                                         :return-type :Order}}
+                              :ringline/searchable-fields [:status]}
                         [:id :uuid]
                         [:status :string]]
           parsed (parser/parse-schema :Order order-schema)
-          lacinia-schema (lacinia/generate-schema parsed)]
+
+          ;; Define custom mutation
+          custom-operations {:mutations {:approveOrder {:args [:map [:order-id :uuid]]
+                                                        :return-type :Order}}}
+
+          lacinia-schema (lacinia/generate-schemas [parsed] custom-operations)]
 
       ;; Verify both auto-generated query and custom mutation exist
       (is (contains? (:queries lacinia-schema) :order) "Auto-generated :order query exists")
@@ -298,17 +302,18 @@
       (is (= 1 (count (:mutations lacinia-schema))) "Exactly 1 mutation")))
 
   (testing "Schema with both custom queries and custom mutations"
-    (let [user-schema [:map {:ringline/datomic-ns :user
-                             :ringline/custom-query {:name :searchUsers
-                                                     :args [:map [:query :string]]
-                                                     :return-type :User}
-                             :ringline/custom-mutation {:name :banUser
-                                                        :args [:map [:user-id :uuid]]
-                                                        :return-type :User}}
+    (let [user-schema [:map {:ringline/datomic-ns :user}
                        [:id :uuid]
                        [:username :string]]
           parsed (parser/parse-schema :User user-schema)
-          lacinia-schema (lacinia/generate-schema parsed)]
+
+          ;; Define both custom queries and mutations
+          custom-operations {:queries {:searchUsers {:args [:map [:query :string]]
+                                                     :return-type :User}}
+                             :mutations {:banUser {:args [:map [:user-id :uuid]]
+                                                   :return-type :User}}}
+
+          lacinia-schema (lacinia/generate-schemas [parsed] custom-operations)]
 
       ;; Verify both custom operations exist
       (is (contains? (:queries lacinia-schema) :searchUsers) "Custom :searchUsers query exists")

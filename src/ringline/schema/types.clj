@@ -62,21 +62,31 @@
 ;; ============================================================================
 
 (def CustomQueryDefinition
-  "Schema for a custom query definition extracted from Malli schema properties.
+  "Schema for a custom query definition.
 
-   Contains the query name, argument schema, and return type."
+   Used when defining custom queries at the root schema level.
+   The query name is the key in the queries map, not part of the definition.
+
+   Example:
+     {:searchUsers {:args [:map [:query :string]]
+                    :return-type :User
+                    :description \"Search users\"}}"
   [:map
-   [:name :keyword]                    ; GraphQL query name (e.g., :searchUsers)
    [:args :any]                        ; Malli schema for query arguments
    [:return-type :keyword]             ; Return type reference (e.g., :User, :string)
    [:description {:optional true} :string]])  ; Optional GraphQL description
 
 (def CustomMutationDefinition
-  "Schema for a custom mutation definition extracted from Malli schema properties.
+  "Schema for a custom mutation definition.
 
-   Contains the mutation name, input schema, and return type."
+   Used when defining custom mutations at the root schema level.
+   The mutation name is the key in the mutations map, not part of the definition.
+
+   Example:
+     {:approveOrder {:args [:map [:order-id :uuid]]
+                     :return-type :Order
+                     :description \"Approve an order\"}}"
   [:map
-   [:name :keyword]                    ; GraphQL mutation name (e.g., :approveOrder)
    [:args :any]                        ; Malli schema for mutation input
    [:return-type :keyword]             ; Return type reference (e.g., :Order, :boolean)
    [:description {:optional true} :string]])  ; Optional GraphQL description
@@ -92,4 +102,24 @@
    Returns nil if valid, or explanation if invalid."
   [mutation-def]
   (m/explain CustomMutationDefinition mutation-def))
+
+(def CustomOperations
+  "Schema for custom operations passed to init-framework.
+
+   Contains maps of custom queries and mutations defined at root schema level.
+
+   Example:
+     {:queries {:searchUsers {:args [:map [:query :string]]
+                              :return-type :User}}
+      :mutations {:approveOrder {:args [:map [:order-id :uuid]]
+                                 :return-type :Order}}}"
+  [:map
+   [:queries {:optional true} [:map-of :keyword CustomQueryDefinition]]
+   [:mutations {:optional true} [:map-of :keyword CustomMutationDefinition]]])
+
+(defn validate-custom-operations
+  "Validate custom operations structure.
+   Returns nil if valid, or explanation if invalid."
+  [custom-ops]
+  (m/explain CustomOperations custom-ops))
 

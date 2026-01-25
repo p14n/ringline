@@ -45,36 +45,6 @@
    Valid operations: :create, :update, :delete"
   :ringline/mutations)
 
-(def custom-query
-  "Property key for defining custom GraphQL queries.
-
-   Example: {:ringline/custom-query {:name :searchUsers
-                                      :args [:map [:query :string] [:limit {:optional true} :int]]
-                                      :return-type :User
-                                      :description \"Search users by query string\"}}
-
-   Value should be a map with:
-   - :name (keyword) - GraphQL query name
-   - :args (Malli schema) - Query argument schema
-   - :return-type (keyword) - Return type reference
-   - :description (string, optional) - GraphQL description"
-  :ringline/custom-query)
-
-(def custom-mutation
-  "Property key for defining custom GraphQL mutations.
-
-   Example: {:ringline/custom-mutation {:name :approveOrder
-                                         :args [:map [:order-id :uuid] [:notes {:optional true} :string]]
-                                         :return-type :Order
-                                         :description \"Approve an order with optional notes\"}}
-
-   Value should be a map with:
-   - :name (keyword) - GraphQL mutation name
-   - :args (Malli schema) - Mutation input schema
-   - :return-type (keyword) - Return type reference
-   - :description (string, optional) - GraphQL description"
-  :ringline/custom-mutation)
-
 ;; Helper functions for property access
 
 (defn get-datomic-ns
@@ -103,103 +73,113 @@
   [properties]
   (get properties mutations #{}))
 
-(defn get-custom-query
-  "Extract custom query definition from schema properties.
-   Returns nil if not present."
-  [properties]
-  (get properties custom-query))
-
-(defn get-custom-mutation
-  "Extract custom mutation definition from schema properties.
-   Returns nil if not present."
-  [properties]
-  (get properties custom-mutation))
-
-(defn custom-query?
-  "Check if schema properties define a custom query"
-  [properties]
-  (some? (get properties custom-query)))
-
-(defn custom-mutation?
-  "Check if schema properties define a custom mutation"
-  [properties]
-  (some? (get properties custom-mutation)))
-
 ;; ============================================================================
-;; Rich Comment Block - REPL Examples
+;; Rich Comment Block - Property Usage Examples
 ;; ============================================================================
 
 (comment
-  ;; Example 1: Define a schema with custom query
+  ;; Entity schema properties define how entities are mapped to Datomic and GraphQL
+
+  ;; ============================================================================
+  ;; Example 1: Basic Entity with Datomic Namespace
+  ;; ============================================================================
+
   (def user-schema
-    [:map {:ringline/datomic-ns :user
-           :ringline/query-root true
-           :ringline/searchable-fields [:username :email]
-           :ringline/custom-query {:name :searchUsers
-                                   :args [:map [:query :string] [:limit {:optional true} :int]]
-                                   :return-type :User
-                                   :description "Search users by query string"}}
+    [:map {:ringline/datomic-ns :user}
      [:id :uuid]
      [:username :string]
      [:email :string]])
 
-  ;; Extract properties
-  (def props (malli.core/properties user-schema))
+  ;; Generates Datomic attributes:
+  ;; :user/id, :user/username, :user/email
 
-  ;; Check for custom query
-  (custom-query? props)
-  ;; => true
+  ;; ============================================================================
+  ;; Example 2: Query Root Entity
+  ;; ============================================================================
 
-  (get-custom-query props)
-  ;; => {:name :searchUsers
-  ;;     :args [:map [:query :string] [:limit {:optional true} :int]]
-  ;;     :return-type :User
-  ;;     :description "Search users by query string"}
-
-  ;; Example 2: Define a schema with custom mutation
-  (def order-schema
-    [:map {:ringline/datomic-ns :order
-           :ringline/custom-mutation {:name :approveOrder
-                                      :args [:map [:order-id :uuid] [:notes {:optional true} :string]]
-                                      :return-type :Order
-                                      :description "Approve an order with optional notes"}}
+  (def user-schema-queryable
+    [:map {:ringline/datomic-ns :user
+           :ringline/query-root true}
      [:id :uuid]
-     [:status :string]
-     [:total :int]])
+     [:username :string]])
 
-  (def order-props (malli.core/properties order-schema))
+  ;; Generates GraphQL query:
+  ;; query { user(id: "...") { id username } }
 
-  (custom-mutation? order-props)
-  ;; => true
+  ;; ============================================================================
+  ;; Example 3: Searchable Fields
+  ;; ============================================================================
 
-  (get-custom-mutation order-props)
-  ;; => {:name :approveOrder
-  ;;     :args [:map [:order-id :uuid] [:notes {:optional true} :string]]
-  ;;     :return-type :Order
-  ;;     :description "Approve an order with optional notes"}
-
-  ;; Example 3: Schema with both custom query and mutation
-  (def product-schema
-    [:map {:ringline/datomic-ns :product
+  (def user-schema-searchable
+    [:map {:ringline/datomic-ns :user
            :ringline/query-root true
-           :ringline/searchable-fields [:name]
-           :ringline/custom-query {:name :searchProducts
-                                   :args [:map [:query :string]]
-                                   :return-type :Product}
-           :ringline/custom-mutation {:name :discontinueProduct
-                                      :args [:map [:product-id :uuid]]
-                                      :return-type :Product}}
+           :ringline/searchable-fields [:username :email]}
      [:id :uuid]
-     [:name :string]
-     [:price :int]])
+     [:username :string]
+     [:email :string]])
 
-  (def product-props (malli.core/properties product-schema))
+  ;; Generates GraphQL query with search args:
+  ;; query { user(username: "alice") { id username email } }
+  ;; query { user(email: "alice@example.com") { id username email } }
 
-  (custom-query? product-props)
-  ;; => true
+  ;; ============================================================================
+  ;; Example 4: Entity Relationships
+  ;; ============================================================================
 
-  (custom-mutation? product-props)
-  ;; => true
+  (def post-schema
+    [:map {:ringline/datomic-ns :post}
+     [:id :uuid]
+     [:title :string]
+     [:author-id {:ringline/ref-to :user} :uuid]])
 
-  :end)
+  ;; Generates Datomic reference:
+  ;; :post/author-id {:db/valueType :db.type/ref}
+
+  ;; Generates GraphQL relationship:
+  ;; type Post { id: ID! title: String! author: User }
+
+  ;; ============================================================================
+  ;; Example 5: Auto-Generated Mutations
+  ;; ============================================================================
+
+  (def user-schema-with-mutations
+    [:map {:ringline/datomic-ns :user
+           :ringline/mutations #{:create :update :delete}}
+     [:id :uuid]
+     [:username :string]
+     [:email :string]])
+
+  ;; Generates GraphQL mutations:
+  ;; mutation { createUser(input: {...}) { id username email } }
+  ;; mutation { updateUser(id: "...", input: {...}) { id username email } }
+  ;; mutation { deleteUser(id: "...") { id } }
+
+  ;; ============================================================================
+  ;; IMPORTANT: Custom Queries and Mutations
+  ;; ============================================================================
+
+  ;; Custom queries and mutations are NOT defined in entity schema properties.
+  ;; They are defined separately at the root level and passed to init-framework.
+
+  ;; WRONG (old API - DO NOT USE):
+  ;; (def user-schema
+  ;;   [:map {:ringline/custom-query {:name :searchUsers ...}}
+  ;;    [:id :uuid]])
+
+  ;; CORRECT (new API):
+  ;; (def user-schema
+  ;;   [:map {:ringline/datomic-ns :user}
+  ;;    [:id :uuid]])
+  ;;
+  ;; (def custom-operations
+  ;;   {:queries {:searchUsers {:args [:map [:query :string]]
+  ;;                            :return-type :User}}})
+  ;;
+  ;; (init-framework {:User user-schema}
+  ;;                 {:custom-operations custom-operations
+  ;;                  :resolvers {:searchUsers search-users-fn}})
+
+  ;; See ringline.core and ringline.schema.lacinia for custom operations examples.
+
+  )
 
