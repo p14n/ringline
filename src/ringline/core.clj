@@ -17,7 +17,8 @@
             [malli.core :as m]
             [malli.registry :as mr]
             [malli.experimental.time :as met]
-            [datomic.api :as d]))
+            [datomic.api :as d]
+            [clojure.string :as str]))
 
 ;; Malli Registry Setup
 
@@ -32,10 +33,10 @@
    This function is called automatically by init-framework."
   []
   (mr/set-default-registry!
-    (mr/composite-registry
-      (m/default-schemas)
-      (met/schemas)
-      (scalars/custom-schemas))))
+   (mr/composite-registry
+    (m/default-schemas)
+    (met/schemas)
+    (scalars/custom-schemas))))
 
 ;; Framework initialization
 
@@ -148,7 +149,7 @@
   [entity-type operation datomic-conn schema]
   ;; Parse the schema once when creating the resolver
   (let [parsed-schema (parser/parse-schema entity-type schema)]
-    (fn resolver [context args value]
+    (fn resolver [context args _value]
       (try
         ;; Extract input from args
         (let [input-data-raw (get args :input)
@@ -217,6 +218,7 @@
             ;; Convert to Datomic pull pattern with where clauses
             pull-result (converter/pull-with-args query-ctx)
             pattern (:pattern pull-result)
+            _ (println ">>>>>>>>" pattern query-ctx)
             where-clauses (:where-clauses pull-result)]
 
         ;; Execute Datomic query
@@ -287,7 +289,7 @@
                                  (.startsWith name-str "update") (subs name-str 6)
                                  (.startsWith name-str "delete") (subs name-str 6)
                                  :else nil)
-                   entity-key (when entity-name (keyword (clojure.string/lower-case entity-name)))
+                   entity-key (when entity-name (keyword (str/lower-case entity-name)))
                    schema (get schemas-map entity-key)]
 
                (if (and operation entity-key schema)
@@ -436,16 +438,16 @@
   ;; Define custom operations separately at root level
   (def custom-operations
     {:queries {:searchUsers {:args [:map
-                                     [:query :string]
-                                     [:role {:optional true} :string]]
+                                    [:query :string]
+                                    [:role {:optional true} :string]]
                              :return-type :User
                              :description "Search users by query string and optional role"}
                :userStats {:args [:map [:user-id :uuid]]
                            :return-type :User
                            :description "Get user statistics"}}
      :mutations {:approveOrder {:args [:map
-                                        [:order-id :uuid]
-                                        [:notes {:optional true} :string]]
+                                       [:order-id :uuid]
+                                       [:notes {:optional true} :string]]
                                 :return-type :Order
                                 :description "Approve an order with optional notes"}
                  :banUser {:args [:map [:user-id :uuid]]

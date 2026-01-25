@@ -222,8 +222,7 @@
         query-name (keyword (str/lower-case (name entity-name)))
         args (generate-query-args parsed-schema)]
     {query-name {:type graphql-name
-                 :args args
-                 :resolve (keyword (str "resolve-" (name query-name)))}}))
+                 :args args}}))
 
 ;; Main generation functions
 
@@ -466,5 +465,4 @@
   (not= :custom-resolver-placeholder
         (get-in schema-with-resolvers [:queries :searchUsers :resolve]))
   ;; => true
-
   )
