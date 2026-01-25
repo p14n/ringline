@@ -1,0 +1,95 @@
+{:contract-type :api
+ :version "1.0.0"
+ :description "Extended core API for custom resolver attachment and validation"
+ 
+ :namespace ringline.core
+ 
+ :functions
+ {:validate-custom-resolvers
+  {:doc "Validate that all custom operations have attached resolvers.
+         
+         Checks that every custom query and mutation has a corresponding
+         resolver function in the resolver map. Throws ex-info if any
+         custom operation is missing a resolver (fail fast)."
+   :args [:parsed-schemas :resolver-map]
+   :returns :nil
+   :throws [{:type :ex-info
+             :when "Custom operations missing resolvers"
+             :data {:missing-resolvers [:set :keyword]
+                    :custom-operations [:set :keyword]
+                    :provided-resolvers [:set :keyword]}}]
+   :example (validate-custom-resolvers
+              [parsed-user-schema parsed-order-schema]
+              {:searchUsers (fn [ctx args val] ...)
+               :approveOrder (fn [ctx args val] ...)})}
+  
+  :extract-custom-operations
+  {:doc "Extract all custom query and mutation names from parsed schemas.
+         
+         Returns a map with :queries and :mutations sets containing
+         the names of all custom operations defined in the schemas."
+   :args [:parsed-schemas]
+   :returns [:map [:queries [:set :keyword]]
+                  [:mutations [:set :keyword]]]
+   :example (extract-custom-operations [parsed-user-schema parsed-order-schema])
+   :example-result {:queries #{:searchUsers :findByEmail}
+                    :mutations #{:approveOrder :transferOwnership}}}
+  
+  :attach-custom-resolvers
+  {:doc "Attach custom resolver functions to Lacinia schema.
+         
+         Replaces :custom-resolver-placeholder with actual resolver functions
+         from the resolver map. Returns updated Lacinia schema."
+   :args [:lacinia-schema :resolver-map]
+   :returns :LaciniaSchema
+   :example (attach-custom-resolvers
+              {:queries {:searchUsers {:type :User
+                                       :args {...}
+                                       :resolve :custom-resolver-placeholder}}}
+              {:searchUsers (fn [ctx args val] ...)})
+   :example-result {:queries {:searchUsers {:type :User
+                                            :args {...}
+                                            :resolve (fn [ctx args val] ...)}}}}
+  
+  :init-framework
+  {:doc "Initialize framework with Malli schemas (EXTENDED).
+         
+         Now accepts :custom-resolvers option for attaching manual resolvers
+         to custom queries and mutations. Validates that all custom operations
+         have resolvers (fail fast). Existing behavior unchanged - backward compatible."
+   :args [:schemas-map :options-map]
+   :options {:datomic-ns-prefix {:type :string
+                                  :optional true
+                                  :doc "Prefix for Datomic namespaces"}
+             :graphql-naming {:type :keyword
+                              :optional true
+                              :values [:camelCase :snake_case]
+                              :doc "GraphQL field naming convention"}
+             :custom-resolvers {:type :map
+                                :optional true
+                                :doc "Map of custom operation names to resolver functions"
+                                :example {:searchUsers (fn [ctx args val] ...)
+                                          :approveOrder (fn [ctx args val] ...)}}}
+   :returns [:map {:datomic [:vector :map]
+                   :lacinia :map
+                   :parsed [:vector :ParsedSchema]}]
+   :changes ["Added :custom-resolvers option for resolver attachment"
+             "Validates custom resolvers during initialization (fail fast)"
+             "Attaches custom resolvers to Lacinia schema"
+             "All existing options and behavior preserved"]
+   :throws [{:type :ex-info
+             :when "Custom operations missing resolvers"
+             :data {:missing-resolvers [:set :keyword]}}]
+   :example (init-framework
+              {:user user-schema :order order-schema}
+              {:custom-resolvers {:searchUsers (fn [ctx args val] ...)
+                                  :approveOrder (fn [ctx args val] ...)}})}}
+ 
+ :backward-compatibility
+ {:existing-code-works true
+  :custom-resolvers-optional true
+  :no-breaking-changes true
+  :description "Existing code that doesn't use custom operations continues to work unchanged.
+                The :custom-resolvers option is optional - only required if schemas define
+                custom queries or mutations."}}
+

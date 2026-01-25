@@ -1,0 +1,117 @@
+{:contract-type :api
+ :version "1.0.0"
+ :description "Extended Lacinia schema generation API for custom operations"
+ 
+ :namespace ringline.schema.lacinia
+ 
+ :functions
+ {:generate-custom-query-schema
+  {:doc "Generate Lacinia query schema from CustomQueryDefinition.
+         
+         Converts custom query definition to Lacinia query schema format.
+         Returns map with query name as key and Lacinia query spec as value."
+   :args [:CustomQueryDefinition :entity-types-map]
+   :returns :map
+   :throws [{:type :ex-info
+             :when "Invalid return type reference"
+             :data {:return-type :keyword
+                    :valid-types [:vector :keyword]}}]
+   :example (generate-custom-query-schema
+              {:name :searchUsers
+               :args [:map [:query :string]]
+               :return-type :User}
+              {:User {...} :Order {...}})
+   :example-result {:searchUsers
+                    {:type :User
+                     :args {:query {:type 'String}}
+                     :resolve :custom-resolver-placeholder}}}
+  
+  :generate-custom-mutation-schema
+  {:doc "Generate Lacinia mutation schema from CustomMutationDefinition.
+         
+         Converts custom mutation definition to Lacinia mutation schema format.
+         Returns map with mutation name as key and Lacinia mutation spec as value."
+   :args [:CustomMutationDefinition :entity-types-map]
+   :returns :map
+   :throws [{:type :ex-info
+             :when "Invalid return type reference"
+             :data {:return-type :keyword
+                    :valid-types [:vector :keyword]}}]
+   :example (generate-custom-mutation-schema
+              {:name :approveOrder
+               :args [:map [:order-id :uuid]]
+               :return-type :Order}
+              {:User {...} :Order {...}})
+   :example-result {:approveOrder
+                    {:type :Order
+                     :args {:order-id {:type 'ID}}
+                     :resolve :custom-resolver-placeholder}}}
+  
+  :malli-args->lacinia-args
+  {:doc "Convert Malli argument schema to Lacinia args map.
+         
+         Transforms Malli [:map ...] schema to Lacinia argument format.
+         Handles primitives, optionals, and nested maps."
+   :args [:malli-schema]
+   :returns :map
+   :example (malli-args->lacinia-args [:map [:query :string] [:limit {:optional true} :int]])
+   :example-result {:query {:type 'String}
+                    :limit {:type 'Int :optional true}}}
+  
+  :resolve-type-reference
+  {:doc "Resolve type reference keyword to Lacinia type.
+         
+         Validates that type reference is either:
+         - An existing entity type
+         - A primitive type (:string, :int, :float, :boolean, :ID, :uuid)
+         - A custom scalar type
+         
+         Throws if type reference is invalid."
+   :args [:type-ref :entity-types-map]
+   :returns :keyword
+   :throws [{:type :ex-info
+             :when "Invalid type reference"
+             :data {:type-ref :keyword
+                    :valid-entities [:vector :keyword]
+                    :valid-primitives [:vector :keyword]}}]
+   :example (resolve-type-reference :User {:User {...} :Order {...}})
+   :example-result :User}
+  
+  :merge-custom-operations
+  {:doc "Merge custom operations with auto-generated operations.
+         
+         Custom operations take precedence on name conflicts.
+         Returns merged Lacinia schema with both queries and mutations."
+   :args [:auto-generated-schema :custom-operations-schema]
+   :returns :map
+   :example (merge-custom-operations
+              {:queries {:getUser {...}}
+               :mutations {:createUser {...}}}
+              {:queries {:searchUsers {...}}
+               :mutations {:approveOrder {...}}})
+   :example-result {:queries {:getUser {...} :searchUsers {...}}
+                    :mutations {:createUser {...} :approveOrder {...}}}}
+  
+  :generate-schema
+  {:doc "Generate Lacinia schema from parsed schemas (EXTENDED).
+         
+         Now processes custom queries and mutations from ParsedSchema.
+         Merges custom operations with auto-generated operations.
+         Existing behavior unchanged - backward compatible."
+   :args [:parsed-schemas]
+   :returns :LaciniaSchema
+   :changes ["Processes :custom-query and :custom-mutation from each ParsedSchema"
+             "Merges custom operations with auto-generated operations"
+             "Custom operations override auto-generated on name conflicts"
+             "All existing functionality preserved"]
+   :example (generate-schema [parsed-user-schema parsed-order-schema])}}
+ 
+ :type-mapping
+ {:malli->lacinia
+  {:string 'String
+   :int 'Int
+   :float 'Float
+   :boolean 'Boolean
+   :uuid 'ID
+   :keyword 'String}}}
+

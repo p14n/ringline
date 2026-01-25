@@ -25,10 +25,10 @@ tests/
 Clojure 1.12.0: Follow standard conventions
 
 ## Recent Changes
+- 004-custom-schema-resolvers: Added Clojure 1.12.0 + Malli 0.20.0 (schema validation), Lacinia 1.3.0-beta-1 (GraphQL), Datomic Free 0.9.5697 (database)
 - 003-custom-scalars: Added Clojure 1.12.0 + Malli 0.20.0 (schema validation), Lacinia 1.3.0-beta-1 (GraphQL), Datomic Free 0.9.5697 (database)
 - 002-graphql-mutations: Added Clojure 1.12.0 + Malli 0.20.0 (schema validation), Lacinia 1.3.0-beta-1 (GraphQL), Datomic Free 0.9.5697 (database)
 
-- 001-malli-graphql-framework: Added Clojure 1.12.0 + Malli 0.20.0 (schema definition), Lacinia 1.3.0-beta-1 (GraphQL), Datomic Free 0.9.5697 (database)
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

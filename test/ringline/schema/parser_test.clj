@@ -81,3 +81,105 @@
       (is (seq (:properties user-schema)) "Preserves properties")
       (is (seq (:relationships user-schema)) "Preserves relationships"))))
 
+;; ============================================================================
+;; T013: parse-custom-query Tests (TDD - Write FIRST, ensure FAIL)
+;; ============================================================================
+
+(deftest parse-custom-query-test
+  (testing "parse-custom-query extracts custom query definition from schema properties"
+    (let [schema [:map {:ringline/custom-query {:name :searchUsers
+                                                 :args [:map [:query :string]]
+                                                 :return-type :User
+                                                 :description "Search users"}}
+                  [:id :uuid]]
+          result (parser/parse-custom-query :User schema)]
+      (is (map? result) "Returns a map")
+      (is (= :searchUsers (:name result)) "Extracts query name")
+      (is (= [:map [:query :string]] (:args result)) "Extracts args schema")
+      (is (= :User (:return-type result)) "Extracts return type")
+      (is (= "Search users" (:description result)) "Extracts description")))
+
+  (testing "parse-custom-query returns nil when no custom query defined"
+    (let [schema [:map [:id :uuid]]
+          result (parser/parse-custom-query :User schema)]
+      (is (nil? result) "Returns nil when no custom query")))
+
+  (testing "parse-custom-query throws on invalid custom query definition"
+    (let [schema [:map {:ringline/custom-query {:args [:map [:query :string]]}}
+                  [:id :uuid]]]
+      (is (thrown? Exception (parser/parse-custom-query :User schema))
+          "Throws when required fields missing"))))
+
+;; ============================================================================
+;; T014: parse-schema with :custom-query field Tests (TDD - Write FIRST)
+;; ============================================================================
+
+(deftest parse-schema-with-custom-query-test
+  (testing "parse-schema includes :custom-query field in ParsedSchema"
+    (let [schema [:map {:ringline/datomic-ns :user
+                        :ringline/custom-query {:name :searchUsers
+                                                :args [:map [:query :string]]
+                                                :return-type :User}}
+                  [:id :uuid]]
+          result (parser/parse-schema :User schema)]
+      (is (contains? result :custom-query) "ParsedSchema has :custom-query field")
+      (is (map? (:custom-query result)) "Custom query is a map")
+      (is (= :searchUsers (get-in result [:custom-query :name])) "Custom query name extracted")))
+
+  (testing "parse-schema sets :custom-query to nil when not defined"
+    (let [schema [:map {:ringline/datomic-ns :user} [:id :uuid]]
+          result (parser/parse-schema :User schema)]
+      (is (contains? result :custom-query) "ParsedSchema has :custom-query field")
+      (is (nil? (:custom-query result)) "Custom query is nil when not defined"))))
+
+;; ============================================================================
+;; T033: parse-custom-mutation Tests (TDD - Write FIRST, ensure FAIL)
+;; ============================================================================
+
+(deftest parse-custom-mutation-test
+  (testing "parse-custom-mutation extracts custom mutation definition from schema properties"
+    (let [schema [:map {:ringline/custom-mutation {:name :approveOrder
+                                                    :args [:map [:order-id :uuid] [:notes {:optional true} :string]]
+                                                    :return-type :Order
+                                                    :description "Approve an order"}}
+                  [:id :uuid]]
+          result (parser/parse-custom-mutation :Order schema)]
+      (is (map? result) "Returns a map")
+      (is (= :approveOrder (:name result)) "Extracts mutation name")
+      (is (= [:map [:order-id :uuid] [:notes {:optional true} :string]] (:args result)) "Extracts args schema")
+      (is (= :Order (:return-type result)) "Extracts return type")
+      (is (= "Approve an order" (:description result)) "Extracts description")))
+
+  (testing "parse-custom-mutation returns nil when no custom mutation defined"
+    (let [schema [:map [:id :uuid]]
+          result (parser/parse-custom-mutation :Order schema)]
+      (is (nil? result) "Returns nil when no custom mutation")))
+
+  (testing "parse-custom-mutation throws on invalid custom mutation definition"
+    (let [schema [:map {:ringline/custom-mutation {:args [:map [:order-id :uuid]]}}
+                  [:id :uuid]]]
+      (is (thrown? Exception (parser/parse-custom-mutation :Order schema))
+          "Throws when required fields missing"))))
+
+;; ============================================================================
+;; T034: parse-schema with :custom-mutation field Tests (TDD - Write FIRST)
+;; ============================================================================
+
+(deftest parse-schema-with-custom-mutation-test
+  (testing "parse-schema includes :custom-mutation field in ParsedSchema"
+    (let [schema [:map {:ringline/datomic-ns :order
+                        :ringline/custom-mutation {:name :approveOrder
+                                                   :args [:map [:order-id :uuid]]
+                                                   :return-type :Order}}
+                  [:id :uuid]]
+          result (parser/parse-schema :Order schema)]
+      (is (contains? result :custom-mutation) "ParsedSchema has :custom-mutation field")
+      (is (map? (:custom-mutation result)) "Custom mutation is a map")
+      (is (= :approveOrder (get-in result [:custom-mutation :name])) "Custom mutation name extracted")))
+
+  (testing "parse-schema sets :custom-mutation to nil when not defined"
+    (let [schema [:map {:ringline/datomic-ns :order} [:id :uuid]]
+          result (parser/parse-schema :Order schema)]
+      (is (contains? result :custom-mutation) "ParsedSchema has :custom-mutation field")
+      (is (nil? (:custom-mutation result)) "Custom mutation is nil when not defined"))))
+

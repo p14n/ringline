@@ -1,0 +1,80 @@
+{:contract-type :api
+ :version "1.0.0"
+ :description "Extended parser API for custom query and mutation definitions"
+ 
+ :namespace ringline.schema.parser
+ 
+ :functions
+ {:parse-custom-query
+  {:doc "Parse custom query definition from schema properties.
+         
+         Extracts and validates :ringline/custom-query property.
+         Returns CustomQueryDefinition map or nil if not present."
+   :args [:schema-name :malli-schema]
+   :returns [:or :nil :CustomQueryDefinition]
+   :throws [{:type :ex-info
+             :when "Invalid custom query definition (missing required fields)"
+             :data {:schema-name :keyword
+                    :custom-query :map
+                    :missing-fields [:vector :keyword]}}]
+   :example (parse-custom-query :user user-schema)
+   :example-result {:name :searchUsers
+                    :args [:map [:query :string]]
+                    :return-type :User
+                    :description "Search users"}}
+  
+  :parse-custom-mutation
+  {:doc "Parse custom mutation definition from schema properties.
+         
+         Extracts and validates :ringline/custom-mutation property.
+         Returns CustomMutationDefinition map or nil if not present."
+   :args [:schema-name :malli-schema]
+   :returns [:or :nil :CustomMutationDefinition]
+   :throws [{:type :ex-info
+             :when "Invalid custom mutation definition (missing required fields)"
+             :data {:schema-name :keyword
+                    :custom-mutation :map
+                    :missing-fields [:vector :keyword]}}]
+   :example (parse-custom-mutation :order order-schema)
+   :example-result {:name :approveOrder
+                    :args [:map [:order-id :uuid]]
+                    :return-type :Order
+                    :description "Approve order"}}
+  
+  :parse-schema
+  {:doc "Parse Malli schema into ParsedSchema (EXTENDED).
+         
+         Now includes :custom-query and :custom-mutation fields in ParsedSchema.
+         Existing behavior unchanged - backward compatible."
+   :args [:schema-name :malli-schema]
+   :returns :ParsedSchema
+   :changes ["Added :custom-query field (optional, CustomQueryDefinition or nil)"
+             "Added :custom-mutation field (optional, CustomMutationDefinition or nil)"
+             "All existing fields preserved"]
+   :example (parse-schema :user user-schema)
+   :example-result {:schema-name :user
+                    :fields [...]
+                    :properties {...}
+                    :relationships [...]
+                    :custom-query {:name :searchUsers ...}
+                    :custom-mutation nil}}
+  
+  :parse-schemas
+  {:doc "Parse multiple Malli schemas (EXTENDED).
+         
+         Now includes custom query/mutation definitions in each ParsedSchema.
+         Existing behavior unchanged - backward compatible."
+   :args [:schemas-map]
+   :returns [:vector :ParsedSchema]
+   :changes ["Each ParsedSchema now includes :custom-query and :custom-mutation fields"
+             "All existing functionality preserved"]
+   :example (parse-schemas {:user user-schema :order order-schema})}}
+ 
+ :validation-rules
+ {:custom-query-required-fields [:name :args :return-type]
+  :custom-mutation-required-fields [:name :args :return-type]
+  :name-must-be-keyword true
+  :args-must-be-valid-malli-schema true
+  :return-type-must-be-keyword true
+  :description-must-be-string-if-present true}}
+

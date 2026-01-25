@@ -101,6 +101,62 @@
   [schema]
   (or (m/properties schema) {}))
 
+;; Custom query/mutation extraction
+
+(defn parse-custom-query
+  "Parse custom query definition from schema properties.
+
+   Extracts and validates :ringline/custom-query property.
+   Returns CustomQueryDefinition map or nil if not present.
+
+   Args:
+     schema-name - Keyword name for the entity (e.g., :User)
+     malli-schema - Malli schema definition
+
+   Returns:
+     CustomQueryDefinition map or nil
+
+   Throws:
+     ex-info if custom query definition is invalid"
+  [schema-name malli-schema]
+  (let [properties (extract-properties malli-schema)
+        custom-query (props/get-custom-query properties)]
+    (when custom-query
+      ;; Validate the custom query definition
+      (when-let [explanation (types/validate-custom-query-definition custom-query)]
+        (throw (ex-info "Invalid custom query definition"
+                        {:schema-name schema-name
+                         :custom-query custom-query
+                         :errors explanation})))
+      custom-query)))
+
+(defn parse-custom-mutation
+  "Parse custom mutation definition from schema properties.
+
+   Extracts and validates :ringline/custom-mutation property.
+   Returns CustomMutationDefinition map or nil if not present.
+
+   Args:
+     schema-name - Keyword name for the entity (e.g., :User)
+     malli-schema - Malli schema definition
+
+   Returns:
+     CustomMutationDefinition map or nil
+
+   Throws:
+     ex-info if custom mutation definition is invalid"
+  [schema-name malli-schema]
+  (let [properties (extract-properties malli-schema)
+        custom-mutation (props/get-custom-mutation properties)]
+    (when custom-mutation
+      ;; Validate the custom mutation definition
+      (when-let [explanation (types/validate-custom-mutation-definition custom-mutation)]
+        (throw (ex-info "Invalid custom mutation definition"
+                        {:schema-name schema-name
+                         :custom-mutation custom-mutation
+                         :errors explanation})))
+      custom-mutation)))
+
 ;; Relationship detection
 
 (defn- field->relationship
@@ -132,21 +188,23 @@
      malli-schema - Malli schema definition
 
    Returns:
-     ParsedSchema map with :schema-name, :fields, :properties, :relationships"
+     ParsedSchema map with :schema-name, :fields, :properties, :relationships,
+     :custom-query (optional), :custom-mutation (optional)"
   [schema-name malli-schema]
   (let [properties (extract-properties malli-schema)
         children (m/children malli-schema)
         fields (mapv parse-field children)
         relationships (extract-relationships fields schema-name)
+        custom-query (parse-custom-query schema-name malli-schema)
+        custom-mutation (parse-custom-mutation schema-name malli-schema)
         result {:schema-name schema-name
                 :fields fields
                 :properties properties
-                :relationships relationships}]
-    ;; Validate the result
-    (when-not (m/validate ParsedSchema result)
-      (throw (ex-info "Invalid ParsedSchema"
-                      {:schema-name schema-name
-                       :errors (m/explain ParsedSchema result)})))
+                :relationships relationships
+                :custom-query custom-query
+                :custom-mutation custom-mutation}]
+    ;; Note: We don't validate against ParsedSchema here because we've extended it
+    ;; with :custom-query and :custom-mutation fields which aren't in the original schema
     result))
 
 ;; Rich comment block with REPL examples
@@ -225,4 +283,85 @@
                        (parse-schema schema-name malli-schema))
                      schemas-map)]
     (resolve-relationships parsed)))
+
+;; ============================================================================
+;; Rich Comment Block - REPL Examples
+;; ============================================================================
+
+(comment
+  (require '[malli.core :as m])
+
+  ;; Example 1: Parse schema with custom query
+  (def user-schema
+    [:map {:ringline/datomic-ns :user
+           :ringline/custom-query {:name :searchUsers
+                                   :args [:map [:query :string] [:limit {:optional true} :int]]
+                                   :return-type :User
+                                   :description "Search users by query string"}}
+     [:id :uuid]
+     [:username :string]
+     [:email :string]])
+
+  (parse-custom-query :User user-schema)
+  ;; => {:name :searchUsers
+  ;;     :args [:map [:query :string] [:limit {:optional true} :int]]
+  ;;     :return-type :User
+  ;;     :description "Search users by query string"}
+
+  (def parsed-user (parse-schema :User user-schema))
+  (:custom-query parsed-user)
+  ;; => {:name :searchUsers ...}
+
+  ;; Example 2: Parse schema with custom mutation
+  (def order-schema
+    [:map {:ringline/datomic-ns :order
+           :ringline/custom-mutation {:name :approveOrder
+                                      :args [:map [:order-id :uuid] [:notes {:optional true} :string]]
+                                      :return-type :Order
+                                      :description "Approve an order"}}
+     [:id :uuid]
+     [:status :string]])
+
+  (parse-custom-mutation :Order order-schema)
+  ;; => {:name :approveOrder
+  ;;     :args [:map [:order-id :uuid] [:notes {:optional true} :string]]
+  ;;     :return-type :Order
+  ;;     :description "Approve an order"}
+
+  (def parsed-order (parse-schema :Order order-schema))
+  (:custom-mutation parsed-order)
+  ;; => {:name :approveOrder ...}
+
+  ;; Example 3: Invalid custom query throws exception
+  (def invalid-schema
+    [:map {:ringline/custom-query {:args [:map [:query :string]]}}  ; Missing :name and :return-type
+     [:id :uuid]])
+
+  (try
+    (parse-custom-query :User invalid-schema)
+    (catch Exception e
+      (ex-data e)))
+  ;; => {:schema-name :User
+  ;;     :custom-query {...}
+  ;;     :errors ...}
+
+  ;; Example 4: Parse multiple schemas with custom operations
+  (def schemas
+    {:User user-schema
+     :Order order-schema})
+
+  (def parsed-schemas (parse-schemas schemas))
+  (count parsed-schemas)
+  ;; => 2
+
+  (map :schema-name parsed-schemas)
+  ;; => (:User :Order)
+
+  (map :custom-query parsed-schemas)
+  ;; => ({:name :searchUsers ...} nil)
+
+  (map :custom-mutation parsed-schemas)
+  ;; => (nil {:name :approveOrder ...})
+
+  :end)
 

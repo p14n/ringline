@@ -1,0 +1,60 @@
+{:contract-type :api
+ :version "1.0.0"
+ :description "Custom query and mutation property definitions for Malli schemas"
+ 
+ :namespace ringline.schema.properties
+ 
+ :properties
+ {:custom-query
+  {:keyword :ringline/custom-query
+   :doc "Property key for defining custom GraphQL queries.
+         
+         Value should be a map with:
+         - :name (keyword) - GraphQL query name
+         - :args (Malli schema) - Query argument schema
+         - :return-type (keyword) - Return type reference
+         - :description (string, optional) - GraphQL description"
+   :example {:ringline/custom-query {:name :searchUsers
+                                      :args [:map [:query :string] [:limit {:optional true} :int]]
+                                      :return-type :User
+                                      :description "Search users by query string"}}}
+  
+  :custom-mutation
+  {:keyword :ringline/custom-mutation
+   :doc "Property key for defining custom GraphQL mutations.
+         
+         Value should be a map with:
+         - :name (keyword) - GraphQL mutation name
+         - :args (Malli schema) - Mutation input schema
+         - :return-type (keyword) - Return type reference
+         - :description (string, optional) - GraphQL description"
+   :example {:ringline/custom-mutation {:name :approveOrder
+                                         :args [:map [:order-id :uuid] [:notes {:optional true} :string]]
+                                         :return-type :Order
+                                         :description "Approve an order with optional notes"}}}}
+ 
+ :helper-functions
+ {:get-custom-query
+  {:doc "Extract custom query definition from schema properties"
+   :args [:properties-map]
+   :returns [:or :nil :map]
+   :example (get-custom-query {:ringline/custom-query {...}})}
+  
+  :get-custom-mutation
+  {:doc "Extract custom mutation definition from schema properties"
+   :args [:properties-map]
+   :returns [:or :nil :map]
+   :example (get-custom-mutation {:ringline/custom-mutation {...}})}
+  
+  :custom-query?
+  {:doc "Check if schema properties define a custom query"
+   :args [:properties-map]
+   :returns :boolean
+   :example (custom-query? {:ringline/custom-query {...}})}
+  
+  :custom-mutation?
+  {:doc "Check if schema properties define a custom mutation"
+   :args [:properties-map]
+   :returns :boolean
+   :example (custom-mutation? {:ringline/custom-mutation {...}})}}}
+

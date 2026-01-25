@@ -94,3 +94,79 @@
     (is (false? (types/collection-type? :string)))
     (is (false? (types/collection-type? :int)))))
 
+;; ============================================================================
+;; T003: CustomQueryDefinition Schema Validation Tests (TDD - Write FIRST)
+;; ============================================================================
+
+(deftest custom-query-definition-schema-test
+  (testing "CustomQueryDefinition schema validates valid query definitions"
+    (let [valid-query {:name :searchUsers
+                       :args [:map [:query :string] [:limit {:optional true} :int]]
+                       :return-type :User
+                       :description "Search users by query string"}]
+      (is (nil? (types/validate-custom-query-definition valid-query))
+          "Valid custom query definition should pass validation")))
+
+  (testing "CustomQueryDefinition schema requires :name field"
+    (let [invalid-query {:args [:map [:query :string]]
+                         :return-type :User}]
+      (is (some? (types/validate-custom-query-definition invalid-query))
+          "Custom query definition without :name should fail validation")))
+
+  (testing "CustomQueryDefinition schema requires :args field"
+    (let [invalid-query {:name :searchUsers
+                         :return-type :User}]
+      (is (some? (types/validate-custom-query-definition invalid-query))
+          "Custom query definition without :args should fail validation")))
+
+  (testing "CustomQueryDefinition schema requires :return-type field"
+    (let [invalid-query {:name :searchUsers
+                         :args [:map [:query :string]]}]
+      (is (some? (types/validate-custom-query-definition invalid-query))
+          "Custom query definition without :return-type should fail validation")))
+
+  (testing "CustomQueryDefinition schema allows optional :description field"
+    (let [query-without-desc {:name :searchUsers
+                              :args [:map [:query :string]]
+                              :return-type :User}]
+      (is (nil? (types/validate-custom-query-definition query-without-desc))
+          "Custom query definition without :description should pass validation"))))
+
+;; ============================================================================
+;; T004: CustomMutationDefinition Schema Validation Tests (TDD - Write FIRST)
+;; ============================================================================
+
+(deftest custom-mutation-definition-schema-test
+  (testing "CustomMutationDefinition schema validates valid mutation definitions"
+    (let [valid-mutation {:name :approveOrder
+                          :args [:map [:order-id :uuid] [:notes {:optional true} :string]]
+                          :return-type :Order
+                          :description "Approve an order with optional notes"}]
+      (is (nil? (types/validate-custom-mutation-definition valid-mutation))
+          "Valid custom mutation definition should pass validation")))
+
+  (testing "CustomMutationDefinition schema requires :name field"
+    (let [invalid-mutation {:args [:map [:order-id :uuid]]
+                            :return-type :Order}]
+      (is (some? (types/validate-custom-mutation-definition invalid-mutation))
+          "Custom mutation definition without :name should fail validation")))
+
+  (testing "CustomMutationDefinition schema requires :args field"
+    (let [invalid-mutation {:name :approveOrder
+                            :return-type :Order}]
+      (is (some? (types/validate-custom-mutation-definition invalid-mutation))
+          "Custom mutation definition without :args should fail validation")))
+
+  (testing "CustomMutationDefinition schema requires :return-type field"
+    (let [invalid-mutation {:name :approveOrder
+                            :args [:map [:order-id :uuid]]}]
+      (is (some? (types/validate-custom-mutation-definition invalid-mutation))
+          "Custom mutation definition without :return-type should fail validation")))
+
+  (testing "CustomMutationDefinition schema allows optional :description field"
+    (let [mutation-without-desc {:name :approveOrder
+                                 :args [:map [:order-id :uuid]]
+                                 :return-type :Order}]
+      (is (nil? (types/validate-custom-mutation-definition mutation-without-desc))
+          "Custom mutation definition without :description should pass validation"))))
+

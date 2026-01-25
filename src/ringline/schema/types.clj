@@ -1,5 +1,6 @@
 (ns ringline.schema.types
-  "Type mappings between Malli, Datomic, and GraphQL")
+  "Type mappings between Malli, Datomic, and GraphQL"
+  (:require [malli.core :as m]))
 
 ;; Malli type → Datomic type mapping
 (def malli->datomic
@@ -55,4 +56,40 @@
   "Check if a Malli type represents a collection (cardinality :many)"
   [malli-type]
   (contains? cardinality-types malli-type))
+
+;; ============================================================================
+;; Custom Query and Mutation Definition Schemas
+;; ============================================================================
+
+(def CustomQueryDefinition
+  "Schema for a custom query definition extracted from Malli schema properties.
+
+   Contains the query name, argument schema, and return type."
+  [:map
+   [:name :keyword]                    ; GraphQL query name (e.g., :searchUsers)
+   [:args :any]                        ; Malli schema for query arguments
+   [:return-type :keyword]             ; Return type reference (e.g., :User, :string)
+   [:description {:optional true} :string]])  ; Optional GraphQL description
+
+(def CustomMutationDefinition
+  "Schema for a custom mutation definition extracted from Malli schema properties.
+
+   Contains the mutation name, input schema, and return type."
+  [:map
+   [:name :keyword]                    ; GraphQL mutation name (e.g., :approveOrder)
+   [:args :any]                        ; Malli schema for mutation input
+   [:return-type :keyword]             ; Return type reference (e.g., :Order, :boolean)
+   [:description {:optional true} :string]])  ; Optional GraphQL description
+
+(defn validate-custom-query-definition
+  "Validate a custom query definition against the CustomQueryDefinition schema.
+   Returns nil if valid, or explanation if invalid."
+  [query-def]
+  (m/explain CustomQueryDefinition query-def))
+
+(defn validate-custom-mutation-definition
+  "Validate a custom mutation definition against the CustomMutationDefinition schema.
+   Returns nil if valid, or explanation if invalid."
+  [mutation-def]
+  (m/explain CustomMutationDefinition mutation-def))
 
