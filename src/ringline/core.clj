@@ -8,6 +8,7 @@
             [ringline.schema.datomic :as datomic]
             [ringline.schema.lacinia :as lacinia]
             [ringline.schema.scalars :as scalars]
+            [ringline.schema.types :as types]
             [ringline.query.converter :as converter]
             [ringline.response.transformer :as transformer]
             [ringline.mutation.parser :as mutation-parser]
@@ -48,7 +49,9 @@
 
    Args:
      schemas-map - Map of entity-name (keyword) to Malli schema
-     options-map - Optional configuration (currently unused, reserved for future)
+     options-map - Optional configuration:
+                   :custom-operations - Map with :queries and :mutations for custom operations
+                   :resolvers - Map of operation-name to resolver function
 
    Returns:
      Map with:
@@ -58,19 +61,32 @@
        :mutations - Vector of parsed mutation definitions (one per entity with mutations)
 
    Example:
-     (init-framework {:User user-schema :Post post-schema} {})"
+     (init-framework {:User user-schema :Post post-schema}
+                     {:custom-operations {:queries {:searchUsers {...}}}
+                      :resolvers {:searchUsers search-users-fn}})"
   [schemas-map options-map]
   ;; Set up Malli registry with custom schemas
   (setup-malli-registry!)
   (try
-    (let [;; Parse all Malli schemas
+    (let [;; Extract custom operations from options
+          custom-operations (:custom-operations options-map)
+          resolvers (:resolvers options-map)
+
+          ;; Validate custom operations if present
+          _ (when custom-operations
+              (when-let [errors (types/validate-custom-operations custom-operations)]
+                (throw (ex-info "Invalid custom operations"
+                                {:custom-operations custom-operations
+                                 :errors errors}))))
+
+          ;; Parse all Malli schemas
           parsed-schemas (parser/parse-schemas schemas-map)
 
           ;; Generate Datomic schemas
           datomic-schemas (mapv datomic/generate-schema parsed-schemas)
 
-          ;; Generate merged Lacinia schema (queries)
-          lacinia-schema (lacinia/generate-schemas parsed-schemas)
+          ;; Generate merged Lacinia schema (queries + custom operations)
+          lacinia-schema (lacinia/generate-schemas parsed-schemas custom-operations)
 
           ;; Parse mutations from schemas
           mutation-defs (into []
@@ -85,12 +101,18 @@
           ;; Merge mutations into Lacinia schema
           lacinia-with-mutations (if (seq mutation-schemas)
                                    (assoc lacinia-schema
-                                          :mutations (apply merge {} (map :mutations mutation-schemas))
+                                          :mutations (merge (:mutations lacinia-schema)
+                                                            (apply merge {} (map :mutations mutation-schemas)))
                                           :input-objects (apply merge {} (map :input-objects mutation-schemas)))
-                                   lacinia-schema)]
+                                   lacinia-schema)
+
+          ;; Attach custom resolvers if provided
+          lacinia-final (if resolvers
+                          (lacinia/attach-resolvers lacinia-with-mutations resolvers)
+                          lacinia-with-mutations)]
 
       {:datomic datomic-schemas
-       :lacinia lacinia-with-mutations
+       :lacinia lacinia-final
        :parsed parsed-schemas
        :mutations mutation-defs})
     (catch Exception e
@@ -388,5 +410,115 @@
 
   ;; Use resolver in Lacinia
   ;; (create-user-resolver context {:input {:username "alice" :email "alice@example.com"}} nil)
+
+  ;; ============================================================================
+  ;; Custom Operations Example (Root-Level API)
+  ;; ============================================================================
+
+  ;; Define entity schemas (no custom operations in properties)
+  (def user-schema
+    [:map {:ringline/datomic-ns :user
+           :ringline/query-root true
+           :ringline/searchable-fields [:username :email]}
+     [:id :uuid]
+     [:username :string]
+     [:email :string]
+     [:role :string]])
+
+  (def order-schema
+    [:map {:ringline/datomic-ns :order
+           :ringline/query-root true}
+     [:id :uuid]
+     [:user-id {:ringline/ref-to :user} :uuid]
+     [:status :string]
+     [:total :int]])
+
+  ;; Define custom operations separately at root level
+  (def custom-operations
+    {:queries {:searchUsers {:args [:map
+                                     [:query :string]
+                                     [:role {:optional true} :string]]
+                             :return-type :User
+                             :description "Search users by query string and optional role"}
+               :userStats {:args [:map [:user-id :uuid]]
+                           :return-type :User
+                           :description "Get user statistics"}}
+     :mutations {:approveOrder {:args [:map
+                                        [:order-id :uuid]
+                                        [:notes {:optional true} :string]]
+                                :return-type :Order
+                                :description "Approve an order with optional notes"}
+                 :banUser {:args [:map [:user-id :uuid]]
+                           :return-type :User
+                           :description "Ban a user"}}})
+
+  ;; Define custom resolver functions
+  (defn search-users-resolver [ctx args value]
+    ;; Implementation would query database
+    [{:id "user-1" :username "alice" :email "alice@example.com" :role "admin"}
+     {:id "user-2" :username "bob" :email "bob@example.com" :role "user"}])
+
+  (defn user-stats-resolver [ctx args value]
+    ;; Implementation would aggregate user data
+    {:id (:user-id args)
+     :username "alice"
+     :email "alice@example.com"
+     :role "admin"})
+
+  (defn approve-order-resolver [ctx args value]
+    ;; Implementation would update order status
+    {:id (:order-id args)
+     :status "approved"
+     :total 100
+     :user-id "user-1"})
+
+  (defn ban-user-resolver [ctx args value]
+    ;; Implementation would ban user
+    {:id (:user-id args)
+     :username "banned-user"
+     :email "banned@example.com"
+     :role "banned"})
+
+  ;; Initialize framework with custom operations
+  (def fw-with-custom-ops
+    (init-framework
+     {:User user-schema
+      :Order order-schema}
+     {:custom-operations custom-operations
+      :resolvers {:searchUsers search-users-resolver
+                  :userStats user-stats-resolver
+                  :approveOrder approve-order-resolver
+                  :banUser ban-user-resolver}}))
+
+  ;; Inspect the generated Lacinia schema
+  (:lacinia fw-with-custom-ops)
+  ;; => {:objects {...}
+  ;;     :queries {:user {...}           ; auto-generated
+  ;;               :order {...}          ; auto-generated
+  ;;               :searchUsers {...}    ; custom
+  ;;               :userStats {...}}     ; custom
+  ;;     :mutations {:approveOrder {...} ; custom
+  ;;                 :banUser {...}}     ; custom
+  ;;     :scalars {...}}
+
+  ;; Custom operations override auto-generated operations with same name
+  (def custom-ops-override
+    {:queries {:user {:args [:map [:id :uuid]]
+                      :return-type :User
+                      :description "Custom user query (overrides auto-generated)"}}})
+
+  (def fw-with-override
+    (init-framework
+     {:User user-schema}
+     {:custom-operations custom-ops-override
+      :resolvers {:user (fn [ctx args value]
+                          {:id (:id args)
+                           :username "custom-lookup"
+                           :email "custom@example.com"
+                           :role "user"})}}))
+
+  ;; The :user query now uses the custom definition instead of auto-generated
+  (get-in fw-with-override [:lacinia :queries :user :description])
+  ;; => "Custom user query (overrides auto-generated)"
   )
 

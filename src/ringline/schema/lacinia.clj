@@ -13,6 +13,7 @@
   [:map
    [:objects :map]
    [:queries {:optional true} :map]
+   [:mutations {:optional true} :map]
    [:enums {:optional true} :map]
    [:scalars {:optional true} :map]])
 
@@ -37,6 +38,67 @@
 ;; ============================================================================
 ;; Type mapping
 ;; ============================================================================
+
+(defn resolve-type-reference
+  "Resolve a type reference to a GraphQL type.
+
+   Handles both entity type references (:User, :Order) and primitive types (:string, :int).
+   Entity types are returned as-is (keywords).
+   Primitive types are converted to GraphQL type symbols.
+
+   Args:
+     type-ref - Type reference keyword (e.g., :User, :string, :int)
+
+   Returns:
+     GraphQL type (keyword for entities, symbol for primitives)
+
+   Throws:
+     ex-info if type reference is invalid"
+  [type-ref]
+  (cond
+    ;; Check if it's a known primitive type
+    (contains? types/malli->graphql type-ref)
+    (types/malli-type->graphql-type type-ref)
+
+    ;; Assume it's an entity type reference (PascalCase keyword like :User, :Order)
+    ;; Entity types start with uppercase letter
+    (and (keyword? type-ref)
+         (let [name-str (name type-ref)]
+           (and (seq name-str)
+                (Character/isUpperCase (first name-str)))))
+    type-ref
+
+    ;; Invalid type reference
+    :else
+    (throw (ex-info "Invalid type reference"
+                    {:type-ref type-ref
+                     :valid-primitives (keys types/malli->graphql)}))))
+
+(defn malli-args->lacinia-args
+  "Convert Malli argument schema to Lacinia args map.
+
+   Transforms Malli [:map ...] schema to Lacinia argument format.
+   Handles primitives, optionals, and nested maps.
+
+   Args:
+     malli-schema - Malli schema (e.g., [:map [:query :string] [:limit {:optional true} :int]])
+
+   Returns:
+     Map of arg-name to {:type GraphQLType :optional boolean}"
+  [malli-schema]
+  (if (and (vector? malli-schema) (= :map (first malli-schema)))
+    (let [children (m/children (m/schema malli-schema))]
+      (into {}
+            (map (fn [[arg-name arg-properties arg-type-schema]]
+                   (let [arg-type (if (keyword? arg-type-schema)
+                                    arg-type-schema
+                                    (m/type arg-type-schema))
+                         graphql-type (resolve-type-reference arg-type)
+                         optional? (:optional arg-properties)]
+                     [arg-name (cond-> {:type graphql-type}
+                                 optional? (assoc :optional true))]))
+                 children)))
+    {}))
 
 (defn- field->graphql-type
   "Convert a field's Malli type to GraphQL (Lacinia) type.
@@ -97,6 +159,48 @@
         relationships (:relationships parsed-schema)]
     {:fields (fields->graphql-fields fields relationships)}))
 
+;; Custom query/mutation generation
+
+(defn generate-custom-query-schema
+  "Generate Lacinia query schema from a custom query definition.
+
+   Converts custom query definition to Lacinia query schema format.
+
+   Args:
+     query-name - Keyword name of the query (e.g., :searchUsers)
+     query-def - CustomQueryDefinition map with :args, :return-type, :description
+
+   Returns:
+     Lacinia query spec map, e.g., {:type :User :args {...} :resolve ...}"
+  [query-name query-def]
+  (let [return-type (resolve-type-reference (:return-type query-def))
+        args (malli-args->lacinia-args (:args query-def))
+        description (:description query-def)]
+    (cond-> {:type return-type
+             :args args
+             :resolve :custom-resolver-placeholder}
+      description (assoc :description description))))
+
+(defn generate-custom-mutation-schema
+  "Generate Lacinia mutation schema from a custom mutation definition.
+
+   Converts custom mutation definition to Lacinia mutation schema format.
+
+   Args:
+     mutation-name - Keyword name of the mutation (e.g., :approveOrder)
+     mutation-def - CustomMutationDefinition map with :args, :return-type, :description
+
+   Returns:
+     Lacinia mutation spec map, e.g., {:type :Order :args {...} :resolve ...}"
+  [mutation-name mutation-def]
+  (let [return-type (resolve-type-reference (:return-type mutation-def))
+        args (malli-args->lacinia-args (:args mutation-def))
+        description (:description mutation-def)]
+    (cond-> {:type return-type
+             :args args
+             :resolve :custom-resolver-placeholder}
+      description (assoc :description description))))
+
 ;; Query generation
 
 (defn- generate-query-args
@@ -125,10 +229,12 @@
 
 (defn generate-schema
   "Generate Lacinia GraphQL schema from a parsed Malli schema.
-   
+
+   Generates object types and auto-generated queries for entities.
+
    Args:
      parsed-schema - ParsedSchema map from parser
-   
+
    Returns:
      LaciniaSchema map with :objects and optionally :queries"
   [parsed-schema]
@@ -136,9 +242,14 @@
         graphql-name (keyword->graphql-name entity-name)
         object-type (generate-object-type parsed-schema)
         is-query-root? (props/query-root? (:properties parsed-schema))
+
+        ;; Generate auto-generated queries
+        auto-queries (when is-query-root?
+                       (generate-query-for-entity parsed-schema))
+
         result (cond-> {:objects {graphql-name object-type}}
-                 is-query-root?
-                 (assoc :queries (generate-query-for-entity parsed-schema)))]
+                 (seq auto-queries)
+                 (assoc :queries auto-queries))]
     ;; Validate the result
     (when-not (m/validate LaciniaSchema result)
       (throw (ex-info "Invalid LaciniaSchema"
@@ -149,38 +260,211 @@
 (defn generate-schemas
   "Generate complete Lacinia GraphQL schema from multiple parsed entities.
 
+   Merges auto-generated schemas with custom operations.
+   Custom operations override auto-generated operations with the same name.
+
    Args:
      parsed-schemas - Vector of ParsedSchema maps
+     custom-operations - Optional map with :queries and :mutations (CustomOperations schema)
 
    Returns:
-     Single LaciniaSchema map with all objects, queries, and custom scalars merged"
-  [parsed-schemas]
-  (let [individual-schemas (map generate-schema parsed-schemas)
-        merged {:objects (apply merge {} (map :objects individual-schemas))
-                :queries (apply merge {} (map :queries individual-schemas))
-                :scalars (custom-scalars)}]  ; T030: Add custom scalars
-    ;; Validate the result
-    (when-not (m/validate LaciniaSchema merged)
-      (throw (ex-info "Invalid merged LaciniaSchema"
-                      {:errors (m/explain LaciniaSchema merged)})))
-    merged))
+     Single LaciniaSchema map with all objects, queries, mutations, and custom scalars merged"
+  ([parsed-schemas]
+   (generate-schemas parsed-schemas nil))
+  ([parsed-schemas custom-operations]
+   (let [individual-schemas (map generate-schema parsed-schemas)
+         auto-queries (apply merge {} (map :queries individual-schemas))
+         auto-mutations (apply merge {} (map :mutations individual-schemas))
+
+         ;; Generate custom queries
+         custom-queries (when-let [queries (:queries custom-operations)]
+                          (into {}
+                                (map (fn [[query-name query-def]]
+                                       [query-name (generate-custom-query-schema query-name query-def)])
+                                     queries)))
+
+         ;; Generate custom mutations
+         custom-mutations (when-let [mutations (:mutations custom-operations)]
+                            (into {}
+                                  (map (fn [[mutation-name mutation-def]]
+                                         [mutation-name (generate-custom-mutation-schema mutation-name mutation-def)])
+                                       mutations)))
+
+         ;; Merge (custom overrides auto-generated)
+         merged {:objects (apply merge {} (map :objects individual-schemas))
+                 :queries (merge auto-queries custom-queries)
+                 :mutations (merge auto-mutations custom-mutations)
+                 :scalars (custom-scalars)}]
+     ;; Validate the result
+     (when-not (m/validate LaciniaSchema merged)
+       (throw (ex-info "Invalid merged LaciniaSchema"
+                       {:errors (m/explain LaciniaSchema merged)})))
+     merged)))
 
 (defn attach-resolvers
   "Attach resolver functions to a Lacinia schema.
-   
+
+   Extended to attach resolvers to both queries and mutations.
+
    Args:
      lacinia-schema - LaciniaSchema map
-     resolvers-map - Map of query-name to resolver function
-   
-   Returns:
-     LaciniaSchema with resolvers attached to queries"
-  [lacinia-schema resolvers-map]
-  (update lacinia-schema :queries
-          (fn [queries]
-            (into {}
-                  (map (fn [[query-name query-def]]
-                         (if-let [resolver (get resolvers-map query-name)]
-                           [query-name (assoc query-def :resolve resolver)]
-                           [query-name query-def]))
-                       queries)))))
+     resolvers-map - Map of operation-name to resolver function
 
+   Returns:
+     LaciniaSchema with resolvers attached to queries and mutations"
+  [lacinia-schema resolvers-map]
+  (-> lacinia-schema
+      (update :queries
+              (fn [queries]
+                (into {}
+                      (map (fn [[query-name query-def]]
+                             (if-let [resolver (get resolvers-map query-name)]
+                               [query-name (assoc query-def :resolve resolver)]
+                               [query-name query-def]))
+                           queries))))
+      (update :mutations
+              (fn [mutations]
+                (into {}
+                      (map (fn [[mutation-name mutation-def]]
+                             (if-let [resolver (get resolvers-map mutation-name)]
+                               [mutation-name (assoc mutation-def :resolve resolver)]
+                               [mutation-name mutation-def]))
+                           mutations))))))
+
+;; ============================================================================
+;; Rich Comment Block - Custom Operations Examples
+;; ============================================================================
+
+(comment
+  ;; Custom operations are defined at the ROOT LEVEL, not in entity schemas
+
+  ;; ============================================================================
+  ;; Example 1: Basic Custom Query
+  ;; ============================================================================
+
+  (require '[ringline.schema.parser :as parser])
+
+  ;; Define entity schema (no custom operations in properties)
+  (def user-schema
+    [:map {:ringline/datomic-ns :user
+           :ringline/query-root true}
+     [:id :uuid]
+     [:username :string]
+     [:email :string]])
+
+  ;; Parse the schema
+  (def parsed (parser/parse-schema :User user-schema))
+
+  ;; Define custom operations separately
+  (def custom-operations
+    {:queries {:searchUsers {:args [:map [:query :string]]
+                             :return-type :User
+                             :description "Search users by query string"}}})
+
+  ;; Generate Lacinia schema with custom operations
+  (def lacinia-schema (generate-schemas [parsed] custom-operations))
+
+  ;; Inspect the result
+  (:queries lacinia-schema)
+  ;; => {:user {...}           ; auto-generated from :ringline/query-root
+  ;;     :searchUsers {...}}   ; custom query
+
+  ;; ============================================================================
+  ;; Example 2: Custom Query and Mutation
+  ;; ============================================================================
+
+  (def custom-ops-both
+    {:queries {:searchUsers {:args [:map [:query :string] [:limit {:optional true} :int]]
+                             :return-type :User
+                             :description "Search users"}}
+     :mutations {:banUser {:args [:map [:user-id :uuid]]
+                           :return-type :User
+                           :description "Ban a user"}}})
+
+  (def schema-with-both (generate-schemas [parsed] custom-ops-both))
+
+  (:queries schema-with-both)
+  ;; => {:user {...}, :searchUsers {...}}
+
+  (:mutations schema-with-both)
+  ;; => {:banUser {...}}
+
+  ;; ============================================================================
+  ;; Example 3: Conflict Resolution (Custom Overrides Auto-Generated)
+  ;; ============================================================================
+
+  ;; Define custom operation with same name as auto-generated
+  (def custom-override
+    {:queries {:user {:args [:map [:id :uuid]]
+                      :return-type :User
+                      :description "Custom user lookup (overrides auto-generated)"}}})
+
+  (def schema-override (generate-schemas [parsed] custom-override))
+
+  ;; Only one :user query exists (custom overrode auto-generated)
+  (count (:queries schema-override))
+  ;; => 1
+
+  (get-in schema-override [:queries :user :description])
+  ;; => "Custom user lookup (overrides auto-generated)"
+
+  ;; ============================================================================
+  ;; Example 4: Multiple Entities with Custom Operations
+  ;; ============================================================================
+
+  (def order-schema
+    [:map {:ringline/datomic-ns :order
+           :ringline/query-root true}
+     [:id :uuid]
+     [:status :string]
+     [:total :int]])
+
+  (def parsed-user (parser/parse-schema :User user-schema))
+  (def parsed-order (parser/parse-schema :Order order-schema))
+
+  (def multi-custom-ops
+    {:queries {:searchUsers {:args [:map [:query :string]]
+                             :return-type :User}}
+     :mutations {:approveOrder {:args [:map [:order-id :uuid]]
+                                :return-type :Order}}})
+
+  (def multi-schema (generate-schemas [parsed-user parsed-order] multi-custom-ops))
+
+  (:queries multi-schema)
+  ;; => {:user {...}          ; auto-generated from User
+  ;;     :order {...}         ; auto-generated from Order
+  ;;     :searchUsers {...}}  ; custom
+
+  (:mutations multi-schema)
+  ;; => {:approveOrder {...}} ; custom
+
+  ;; ============================================================================
+  ;; Example 5: Attaching Resolvers
+  ;; ============================================================================
+
+  (defn search-users-fn [ctx args value]
+    ;; Mock implementation
+    [{:id "user-1" :username "alice" :email "alice@example.com"}
+     {:id "user-2" :username "bob" :email "bob@example.com"}])
+
+  (defn ban-user-fn [ctx args value]
+    {:id (:user-id args)
+     :username "banned"
+     :email "banned@example.com"})
+
+  (def resolvers
+    {:searchUsers search-users-fn
+     :banUser ban-user-fn})
+
+  (def schema-with-resolvers
+    (attach-resolvers schema-with-both resolvers))
+
+  ;; Verify resolvers attached
+  (fn? (get-in schema-with-resolvers [:queries :searchUsers :resolve]))
+  ;; => true
+
+  (not= :custom-resolver-placeholder
+        (get-in schema-with-resolvers [:queries :searchUsers :resolve]))
+  ;; => true
+
+  )

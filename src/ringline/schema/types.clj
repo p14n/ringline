@@ -1,5 +1,6 @@
 (ns ringline.schema.types
-  "Type mappings between Malli, Datomic, and GraphQL")
+  "Type mappings between Malli, Datomic, and GraphQL"
+  (:require [malli.core :as m]))
 
 ;; Malli type → Datomic type mapping
 (def malli->datomic
@@ -55,4 +56,70 @@
   "Check if a Malli type represents a collection (cardinality :many)"
   [malli-type]
   (contains? cardinality-types malli-type))
+
+;; ============================================================================
+;; Custom Query and Mutation Definition Schemas
+;; ============================================================================
+
+(def CustomQueryDefinition
+  "Schema for a custom query definition.
+
+   Used when defining custom queries at the root schema level.
+   The query name is the key in the queries map, not part of the definition.
+
+   Example:
+     {:searchUsers {:args [:map [:query :string]]
+                    :return-type :User
+                    :description \"Search users\"}}"
+  [:map
+   [:args :any]                        ; Malli schema for query arguments
+   [:return-type :keyword]             ; Return type reference (e.g., :User, :string)
+   [:description {:optional true} :string]])  ; Optional GraphQL description
+
+(def CustomMutationDefinition
+  "Schema for a custom mutation definition.
+
+   Used when defining custom mutations at the root schema level.
+   The mutation name is the key in the mutations map, not part of the definition.
+
+   Example:
+     {:approveOrder {:args [:map [:order-id :uuid]]
+                     :return-type :Order
+                     :description \"Approve an order\"}}"
+  [:map
+   [:args :any]                        ; Malli schema for mutation input
+   [:return-type :keyword]             ; Return type reference (e.g., :Order, :boolean)
+   [:description {:optional true} :string]])  ; Optional GraphQL description
+
+(defn validate-custom-query-definition
+  "Validate a custom query definition against the CustomQueryDefinition schema.
+   Returns nil if valid, or explanation if invalid."
+  [query-def]
+  (m/explain CustomQueryDefinition query-def))
+
+(defn validate-custom-mutation-definition
+  "Validate a custom mutation definition against the CustomMutationDefinition schema.
+   Returns nil if valid, or explanation if invalid."
+  [mutation-def]
+  (m/explain CustomMutationDefinition mutation-def))
+
+(def CustomOperations
+  "Schema for custom operations passed to init-framework.
+
+   Contains maps of custom queries and mutations defined at root schema level.
+
+   Example:
+     {:queries {:searchUsers {:args [:map [:query :string]]
+                              :return-type :User}}
+      :mutations {:approveOrder {:args [:map [:order-id :uuid]]
+                                 :return-type :Order}}}"
+  [:map
+   [:queries {:optional true} [:map-of :keyword CustomQueryDefinition]]
+   [:mutations {:optional true} [:map-of :keyword CustomMutationDefinition]]])
+
+(defn validate-custom-operations
+  "Validate custom operations structure.
+   Returns nil if valid, or explanation if invalid."
+  [custom-ops]
+  (m/explain CustomOperations custom-ops))
 

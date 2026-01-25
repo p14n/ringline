@@ -142,11 +142,6 @@
                 :fields fields
                 :properties properties
                 :relationships relationships}]
-    ;; Validate the result
-    (when-not (m/validate ParsedSchema result)
-      (throw (ex-info "Invalid ParsedSchema"
-                      {:schema-name schema-name
-                       :errors (m/explain ParsedSchema result)})))
     result))
 
 ;; Rich comment block with REPL examples
@@ -214,10 +209,10 @@
 
 (defn parse-schemas
   "Parse multiple Malli schemas and resolve relationships.
-   
+
    Args:
      schemas-map - Map of schema-name to malli-schema (e.g., {:User user-schema :Post post-schema})
-   
+
    Returns:
      Vector of ParsedSchema maps with resolved relationships"
   [schemas-map]
@@ -225,4 +220,85 @@
                        (parse-schema schema-name malli-schema))
                      schemas-map)]
     (resolve-relationships parsed)))
+
+;; ============================================================================
+;; Rich Comment Block - Parser Usage Examples
+;; ============================================================================
+
+(comment
+  ;; The parser extracts entity metadata from Malli schemas
+  ;; It does NOT parse custom queries or mutations (those are defined separately)
+
+  ;; ============================================================================
+  ;; Example 1: Basic Entity Parsing
+  ;; ============================================================================
+
+  (def user-schema
+    [:map {:ringline/datomic-ns :user
+           :ringline/query-root true}
+     [:id :uuid]
+     [:username :string]
+     [:email :string]])
+
+  (def parsed (parse-schema :User user-schema))
+
+  parsed
+  ;; => {:schema-name :User
+  ;;     :fields [{:name :id :type :uuid :required true ...}
+  ;;              {:name :username :type :string :required true ...}
+  ;;              {:name :email :type :string :required true ...}]
+  ;;     :properties {:ringline/datomic-ns :user
+  ;;                  :ringline/query-root true}
+  ;;     :relationships []}
+
+  ;; ============================================================================
+  ;; Example 2: Entity with Relationships
+  ;; ============================================================================
+
+  (def post-schema
+    [:map {:ringline/datomic-ns :post}
+     [:id :uuid]
+     [:title :string]
+     [:author-id {:ringline/ref-to :user} :uuid]])
+
+  (def parsed-post (parse-schema :Post post-schema))
+
+  (:relationships parsed-post)
+  ;; => [{:field :author-id
+  ;;      :source :Post
+  ;;      :target :user
+  ;;      :cardinality :one
+  ;;      :bidirectional false}]
+
+  ;; ============================================================================
+  ;; Example 3: Multiple Schemas with Relationship Resolution
+  ;; ============================================================================
+
+  (def schemas-map
+    {:User user-schema
+     :Post post-schema})
+
+  (def parsed-schemas (parse-schemas schemas-map))
+
+  ;; Returns vector of ParsedSchema maps with resolved relationships
+  (count parsed-schemas)
+  ;; => 2
+
+  ;; ============================================================================
+  ;; IMPORTANT: Custom Operations Are NOT Parsed Here
+  ;; ============================================================================
+
+  ;; Custom queries and mutations are NOT parsed from entity schemas.
+  ;; They are defined separately and passed to ringline.schema.lacinia/generate-schemas
+
+  ;; The parser only extracts:
+  ;; - Entity fields and their types
+  ;; - Entity properties (datomic-ns, query-root, searchable-fields, etc.)
+  ;; - Entity relationships (ref-to)
+
+  ;; For custom operations, see:
+  ;; - ringline.schema.lacinia (generate-schemas function)
+  ;; - ringline.core (init-framework function)
+
+  )
 

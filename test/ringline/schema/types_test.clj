@@ -94,3 +94,98 @@
     (is (false? (types/collection-type? :string)))
     (is (false? (types/collection-type? :int)))))
 
+;; ============================================================================
+;; T003: CustomQueryDefinition Schema Validation Tests (NEW API - name is map key)
+;; ============================================================================
+
+(deftest custom-query-definition-schema-test
+  (testing "CustomQueryDefinition schema validates valid query definitions"
+    (let [valid-query {:args [:map [:query :string] [:limit {:optional true} :int]]
+                       :return-type :User
+                       :description "Search users by query string"}]
+      (is (nil? (types/validate-custom-query-definition valid-query))
+          "Valid custom query definition should pass validation")))
+
+  (testing "CustomQueryDefinition schema requires :args field"
+    (let [invalid-query {:return-type :User}]
+      (is (some? (types/validate-custom-query-definition invalid-query))
+          "Custom query definition without :args should fail validation")))
+
+  (testing "CustomQueryDefinition schema requires :return-type field"
+    (let [invalid-query {:args [:map [:query :string]]}]
+      (is (some? (types/validate-custom-query-definition invalid-query))
+          "Custom query definition without :return-type should fail validation")))
+
+  (testing "CustomQueryDefinition schema allows optional :description field"
+    (let [query-without-desc {:args [:map [:query :string]]
+                              :return-type :User}]
+      (is (nil? (types/validate-custom-query-definition query-without-desc))
+          "Custom query definition without :description should pass validation"))))
+
+;; ============================================================================
+;; T004: CustomMutationDefinition Schema Validation Tests (NEW API - name is map key)
+;; ============================================================================
+
+(deftest custom-mutation-definition-schema-test
+  (testing "CustomMutationDefinition schema validates valid mutation definitions"
+    (let [valid-mutation {:args [:map [:order-id :uuid] [:notes {:optional true} :string]]
+                          :return-type :Order
+                          :description "Approve an order with optional notes"}]
+      (is (nil? (types/validate-custom-mutation-definition valid-mutation))
+          "Valid custom mutation definition should pass validation")))
+
+  (testing "CustomMutationDefinition schema requires :args field"
+    (let [invalid-mutation {:return-type :Order}]
+      (is (some? (types/validate-custom-mutation-definition invalid-mutation))
+          "Custom mutation definition without :args should fail validation")))
+
+  (testing "CustomMutationDefinition schema requires :return-type field"
+    (let [invalid-mutation {:args [:map [:order-id :uuid]]}]
+      (is (some? (types/validate-custom-mutation-definition invalid-mutation))
+          "Custom mutation definition without :return-type should fail validation")))
+
+  (testing "CustomMutationDefinition schema allows optional :description field"
+    (let [mutation-without-desc {:args [:map [:order-id :uuid]]
+                                 :return-type :Order}]
+      (is (nil? (types/validate-custom-mutation-definition mutation-without-desc))
+          "Custom mutation definition without :description should pass validation"))))
+
+;; ============================================================================
+;; CustomOperations Schema Validation Tests (NEW API)
+;; ============================================================================
+
+(deftest custom-operations-schema-test
+  (testing "CustomOperations schema validates valid operations map"
+    (let [valid-ops {:queries {:searchUsers {:args [:map [:query :string]]
+                                             :return-type :User}}
+                     :mutations {:approveOrder {:args [:map [:order-id :uuid]]
+                                                :return-type :Order}}}]
+      (is (nil? (types/validate-custom-operations valid-ops))
+          "Valid custom operations should pass validation")))
+
+  (testing "CustomOperations schema allows queries-only"
+    (let [queries-only {:queries {:searchUsers {:args [:map [:query :string]]
+                                                :return-type :User}}}]
+      (is (nil? (types/validate-custom-operations queries-only))
+          "Custom operations with only queries should pass validation")))
+
+  (testing "CustomOperations schema allows mutations-only"
+    (let [mutations-only {:mutations {:approveOrder {:args [:map [:order-id :uuid]]
+                                                     :return-type :Order}}}]
+      (is (nil? (types/validate-custom-operations mutations-only))
+          "Custom operations with only mutations should pass validation")))
+
+  (testing "CustomOperations schema allows empty map"
+    (is (nil? (types/validate-custom-operations {}))
+        "Empty custom operations map should pass validation"))
+
+  (testing "CustomOperations schema rejects invalid query definitions"
+    (let [invalid-ops {:queries {:searchUsers {:args [:map [:query :string]]}}}]  ; Missing :return-type
+      (is (some? (types/validate-custom-operations invalid-ops))
+          "Custom operations with invalid query definition should fail validation")))
+
+  (testing "CustomOperations schema rejects invalid mutation definitions"
+    (let [invalid-ops {:mutations {:approveOrder {:return-type :Order}}}]  ; Missing :args
+      (is (some? (types/validate-custom-operations invalid-ops))
+          "Custom operations with invalid mutation definition should fail validation"))))
+

@@ -81,3 +81,8 @@
       (is (seq (:properties user-schema)) "Preserves properties")
       (is (seq (:relationships user-schema)) "Preserves relationships"))))
 
+;; ============================================================================
+;; NOTE: Tests for parse-custom-query and parse-custom-mutation removed
+;; Custom operations are now defined at root level, not in entity schemas
+;; See custom_operations_test.clj for integration tests
+;; ============================================================================

@@ -1,0 +1,14 @@
+[[31mE[m]
+
+[31mERROR[m in unit (ns.clj:9)
+Failed loading tests:
+Exception: clojure.lang.Compiler$CompilerException: Syntax error compiling at (ringline/integration/custom_operations_test.clj:91:30).
+#:clojure.error{:phase :compile-syntax-check, :line 91, :column 30, :source "ringline/integration/custom_operations_test.clj"}
+ at clojure.lang.Compiler.analyze (Compiler.java:7340)
+    ...
+(Rest of stacktrace elided)
+Caused by: java.lang.RuntimeException: No such var: parser/parse-custom-query
+ at clojure.lang.Util.runtimeException (Util.java:221)
+    ...
+(Rest of stacktrace elided)
+[31m1 tests, 1 assertions, 1 errors, 0 failures.[m
