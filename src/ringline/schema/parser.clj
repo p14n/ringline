@@ -38,7 +38,15 @@
 (defn- extract-field-type
   "Extract the Malli type from a field schema (expects Malli schema object)"
   [field-schema]
-  (m/type field-schema))
+  (let [schema-type (m/type field-schema)]
+    ;; If it's a schema reference (:malli.core/schema), dereference it
+    (if (= schema-type :malli.core/schema)
+      ;; Get the form and extract the type from it
+      (let [form (m/form field-schema)]
+        (if (keyword? form)
+          form  ; The form is the type keyword (e.g., :time/local-date)
+          schema-type))
+      schema-type)))
 
 (defn- extract-cardinality
   "Determine cardinality (:one or :many) from field type"

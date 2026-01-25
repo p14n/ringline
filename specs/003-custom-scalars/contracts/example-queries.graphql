@@ -1,0 +1,239 @@
+# Example GraphQL Queries and Mutations
+# Demonstrating usage of custom scalars (Date, DateTime, Decimal) and Enums
+
+# ============================================================================
+# Date Scalar Examples
+# ============================================================================
+
+# Query events by specific date
+query EventsByDate {
+  events(eventDate: "2024-01-15") {
+    id
+    name
+    eventDate
+    deadline
+    createdAt
+  }
+}
+
+# Query events in date range
+query EventsInDateRange {
+  events(
+    afterDate: "2024-01-01"
+    beforeDate: "2024-12-31"
+  ) {
+    id
+    name
+    eventDate
+    deadline
+  }
+}
+
+# Create event with date
+mutation CreateEvent {
+  createEvent(
+    name: "Product Launch"
+    eventDate: "2024-06-15"
+    deadline: "2024-06-01"
+  ) {
+    id
+    name
+    eventDate
+    deadline
+    createdAt
+  }
+}
+
+# ============================================================================
+# DateTime Scalar Examples
+# ============================================================================
+
+# Query tasks scheduled in datetime range
+query TasksScheduledInRange {
+  tasks(
+    scheduledAfter: "2024-01-15T00:00:00+00:00"
+    scheduledBefore: "2024-01-31T23:59:59+00:00"
+  ) {
+    id
+    title
+    scheduledFor
+    createdAt
+    updatedAt
+  }
+}
+
+# Create task with datetime (timezone required)
+mutation CreateTaskWithDatetime {
+  createTask(
+    title: "Review quarterly report"
+    description: "Q1 2024 financial review"
+    status: IN_PROGRESS
+    priority: HIGH
+    scheduledFor: "2024-01-20T14:30:00-05:00"
+    dueDate: "2024-01-25"
+  ) {
+    id
+    title
+    status
+    priority
+    scheduledFor
+    dueDate
+    createdAt
+  }
+}
+
+# Update task datetime (different timezone)
+mutation UpdateTaskDatetime {
+  updateTask(
+    id: "550e8400-e29b-41d4-a716-446655440000"
+    scheduledFor: "2024-01-20T19:30:00+00:00"  # Same moment, UTC
+  ) {
+    id
+    scheduledFor
+    updatedAt
+  }
+}
+
+# ============================================================================
+# Enum Scalar Examples
+# ============================================================================
+
+# Query tasks by status (case-sensitive)
+query TasksByStatus {
+  tasks(status: COMPLETED) {
+    id
+    title
+    status
+    priority
+  }
+}
+
+# Query tasks by priority
+query HighPriorityTasks {
+  tasks(priority: HIGH) {
+    id
+    title
+    status
+    priority
+    dueDate
+  }
+}
+
+# Create task with enum values
+mutation CreateTaskWithEnums {
+  createTask(
+    title: "Implement custom scalars"
+    status: DRAFT
+    priority: URGENT
+  ) {
+    id
+    title
+    status
+    priority
+  }
+}
+
+# Update task status (enum transition)
+mutation UpdateTaskStatus {
+  updateTask(
+    id: "550e8400-e29b-41d4-a716-446655440000"
+    status: COMPLETED
+  ) {
+    id
+    status
+    updatedAt
+  }
+}
+
+# ============================================================================
+# Decimal Scalar Examples
+# ============================================================================
+
+# Query products by price range
+query ProductsByPriceRange {
+  products(
+    minPrice: "10.00"
+    maxPrice: "100.00"
+  ) {
+    id
+    name
+    price
+    category
+  }
+}
+
+# Create product with precise decimal price
+mutation CreateProductWithDecimal {
+  createProduct(
+    name: "Premium Coffee Beans"
+    description: "Single-origin Ethiopian coffee"
+    price: "19.99"
+    weightKg: "0.5000000000"  # 10 decimal places (max scale)
+    category: FOOD
+    launchDate: "2024-02-01"
+  ) {
+    id
+    name
+    price
+    weightKg
+    category
+    launchDate
+  }
+}
+
+# Update product price (maintains precision)
+mutation UpdateProductPrice {
+  updateProduct(
+    id: "550e8400-e29b-41d4-a716-446655440000"
+    price: "21.49"
+  ) {
+    id
+    name
+    price
+  }
+}
+
+# ============================================================================
+# Combined Examples (Multiple Scalar Types)
+# ============================================================================
+
+# Query products with all filters
+query ProductsWithAllFilters {
+  products(
+    category: ELECTRONICS
+    minPrice: "50.00"
+    maxPrice: "500.00"
+  ) {
+    id
+    name
+    description
+    price
+    weightKg
+    category
+    createdAt
+    launchDate
+  }
+}
+
+# Create task with all scalar types
+mutation CreateCompleteTask {
+  createTask(
+    title: "Launch marketing campaign"
+    description: "Q2 2024 product launch campaign"
+    status: DRAFT
+    priority: HIGH
+    scheduledFor: "2024-04-01T09:00:00-04:00"
+    dueDate: "2024-06-30"
+  ) {
+    id
+    title
+    description
+    status
+    priority
+    scheduledFor
+    dueDate
+    createdAt
+    updatedAt
+  }
+}
+

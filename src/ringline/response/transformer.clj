@@ -1,7 +1,9 @@
 (ns ringline.response.transformer
   "Transform Datomic query results to Lacinia-compatible GraphQL format"
   (:require [malli.core :as m]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [ringline.schema.scalars :as scalars])
+  (:import [java.time Instant LocalDate ZoneOffset]))
 
 ;; Helper functions
 
@@ -36,12 +38,18 @@
              datomic-entity)))
 
 (defn- transform-field-value
-  "Transform a field value, handling nested entities and UUID conversion"
+  "Transform a field value, handling nested entities and UUID conversion.
+
+  T033, T053, T073, T094: Extended to handle Date, DateTime, Enum, and Decimal scalar serialization"
   [value parsed-schema]
   (cond
     ;; Vector of entities (many relationship)
     (and (vector? value) (every? map? value))
     (mapv #(transform-entity % parsed-schema) value)
+
+    ;; Vector of keywords (enum array)
+    (and (vector? value) (every? keyword? value))
+    (mapv scalars/serialize-enum value)
 
     ;; Single entity (one relationship)
     (and (map? value) (some namespace (keys value)))
@@ -50,6 +58,31 @@
     ;; UUID - convert to string for GraphQL ID type
     (instance? java.util.UUID value)
     (str value)
+
+    ;; T033, T053: Instant - convert to Date or DateTime string
+    ;; Heuristic: Midnight UTC = Date field, otherwise = DateTime field
+    ;; Note: For proper handling, we should check field type from schema
+    ;; TODO: In future, pass field type info to avoid heuristic
+    (instance? Instant value)
+    (let [odt (.atOffset ^Instant value ZoneOffset/UTC)]
+      (if (and (= 0 (.getHour odt))
+               (= 0 (.getMinute odt))
+               (= 0 (.getSecond odt)))
+        ;; Midnight UTC - likely a Date field
+        (scalars/serialize-date (.toLocalDate odt))
+        ;; Not midnight - likely a DateTime field
+        ;; T053: Serialize as DateTime with UTC timezone
+        (scalars/serialize-datetime odt)))
+
+    ;; T073: Keyword - serialize to string for GraphQL enum
+    ;; Enum values are stored as keywords in Datomic
+    (keyword? value)
+    (scalars/serialize-enum value)
+
+    ;; T094: BigDecimal - serialize to string for GraphQL Decimal scalar
+    ;; Serialized as string to avoid JavaScript precision loss (per FR-019)
+    (instance? java.math.BigDecimal value)
+    (scalars/serialize-decimal value)
 
     ;; Primitive value
     :else value))
@@ -81,14 +114,29 @@
   (mapv #(datomic->graphql % parsed-schema) datomic-entities))
 
 (defn- transform-value
-  "Transform a value for GraphQL (e.g., UUID to string)"
+  "Transform a value for GraphQL (e.g., UUID to string).
+
+  For custom scalar types (Date, DateTime, Decimal), pass through the raw value
+  and let Lacinia's scalar serializers handle the conversion.
+
+  For enums (keywords), convert to strings since they're mapped to String type in GraphQL."
   [value]
   (cond
     ;; UUID - convert to string for GraphQL ID type
     (instance? java.util.UUID value)
     (str value)
 
-    ;; Other values pass through
+    ;; Vector of keywords (enum array) - convert each to string
+    (and (vector? value) (every? keyword? value))
+    (mapv name value)
+
+    ;; Keyword (enum) - convert to string
+    ;; Enums are mapped to String type in GraphQL, not custom scalars
+    (keyword? value)
+    (name value)
+
+    ;; Other values pass through (including java.util.Date, BigDecimal)
+    ;; Lacinia's custom scalar serializers will handle these
     :else value))
 
 (defn- filter-by-selections

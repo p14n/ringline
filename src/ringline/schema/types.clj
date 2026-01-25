@@ -11,7 +11,12 @@
    :uuid    :db.type/uuid
    :inst    :db.type/instant
    :keyword :db.type/keyword
-   :ref     :db.type/ref})
+   :ref     :db.type/ref
+   ;; Custom scalar types (T010-T013)
+   :time/local-date      :db.type/instant  ; Date stored as midnight UTC
+   :time/offset-date-time :db.type/instant ; DateTime stored as instant (dual-attribute for timezone)
+   :enum                 :db.type/keyword  ; Enum stored as keyword
+   :decimal              :db.type/bigdec}) ; Decimal stored as BigDecimal
 
 ;; Malli type → GraphQL type mapping
 (def malli->graphql
@@ -25,7 +30,11 @@
    :keyword 'String
    :enum    'String  ; Will be refined to specific enum type
    :vector  'list    ; Will be refined with element type
-   :map     'Object}) ; Will be refined to specific object type
+   :map     'Object  ; Will be refined to specific object type
+   ;; Custom scalar types (T014-T017)
+   :time/local-date      'Date     ; ISO8601 date string (YYYY-MM-DD, 10 chars)
+   :time/offset-date-time 'DateTime ; ISO8601 datetime with timezone (25 chars)
+   :decimal              'Decimal}) ; Decimal scalar (string to avoid JS precision loss)
 
 ;; Cardinality detection
 (def cardinality-types

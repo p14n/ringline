@@ -2,6 +2,7 @@
   "Contract tests for mutation executor"
   (:require [clojure.test :refer [deftest is testing]]
             [ringline.mutation.executor :as executor]
+            [ringline.schema.parser :as parser]
             [ringline.fixtures :as fixtures]))
 
 ;; Mock Datomic connection for testing
@@ -18,12 +19,13 @@
 ;; T054: Test successful create mutation execution
 (deftest execute-create-mutation-test
   (testing "execute-mutation successfully creates entity"
-    (let [input {:operation :create
+    (let [parsed-schema (parser/parse-schema :user fixtures/user-with-mutations-schema)
+          input {:operation :create
                  :entity-type :user
                  :data {:username "alice"
                         :email "alice@example.com"
                         :created-at 1234567890}}
-          result (executor/execute-mutation input fixtures/user-with-mutations-schema mock-db-conn)]
+          result (executor/execute-mutation input fixtures/user-with-mutations-schema parsed-schema mock-db-conn)]
       (is (map? result) "Returns a map")
       (is (true? (:success result)) "Success is true")
       (is (= :create (:operation result)) "Operation is :create")
@@ -33,12 +35,13 @@
       (is (int? (:timestamp result)) "Has timestamp")))
 
   (testing "create mutation returns entity data"
-    (let [input {:operation :create
+    (let [parsed-schema (parser/parse-schema :user fixtures/user-with-mutations-schema)
+          input {:operation :create
                  :entity-type :user
                  :data {:username "alice"
                         :email "alice@example.com"
                         :created-at 1234567890}}
-          result (executor/execute-mutation input fixtures/user-with-mutations-schema mock-db-conn)
+          result (executor/execute-mutation input fixtures/user-with-mutations-schema parsed-schema mock-db-conn)
           data (:data result)]
       (is (= "alice" (:username data)) "Has username in data")
       (is (= "alice@example.com" (:email data)) "Has email in data"))))
@@ -46,12 +49,13 @@
 ;; T055: Test successful update mutation execution
 (deftest execute-update-mutation-test
   (testing "execute-mutation successfully updates entity"
-    (let [user-id (java.util.UUID/randomUUID)
+    (let [parsed-schema (parser/parse-schema :user fixtures/user-with-mutations-schema)
+          user-id (java.util.UUID/randomUUID)
           input {:operation :update
                  :entity-type :user
                  :entity-id user-id
                  :data {:email "newemail@example.com"}}
-          result (executor/execute-mutation input fixtures/user-with-mutations-schema mock-db-conn)]
+          result (executor/execute-mutation input fixtures/user-with-mutations-schema parsed-schema mock-db-conn)]
       (is (true? (:success result)) "Success is true")
       (is (= :update (:operation result)) "Operation is :update")
       (is (= user-id (:entity-id result)) "Has correct entity-id")
@@ -60,11 +64,12 @@
 ;; T056: Test successful delete mutation execution
 (deftest execute-delete-mutation-test
   (testing "execute-mutation successfully deletes entity"
-    (let [user-id (java.util.UUID/randomUUID)
+    (let [parsed-schema (parser/parse-schema :user fixtures/user-with-mutations-schema)
+          user-id (java.util.UUID/randomUUID)
           input {:operation :delete
                  :entity-type :user
                  :entity-id user-id}
-          result (executor/execute-mutation input fixtures/user-with-mutations-schema mock-db-conn)]
+          result (executor/execute-mutation input fixtures/user-with-mutations-schema parsed-schema mock-db-conn)]
       (is (true? (:success result)) "Success is true")
       (is (= :delete (:operation result)) "Operation is :delete")
       (is (= user-id (:entity-id result)) "Has correct entity-id")
@@ -73,11 +78,12 @@
 ;; T057: Test validation error handling
 (deftest validation-error-handling-test
   (testing "execute-mutation returns validation errors for invalid input"
-    (let [input {:operation :create
+    (let [parsed-schema (parser/parse-schema :user fixtures/user-with-mutations-schema)
+          input {:operation :create
                  :entity-type :user
                  :data {:username 123  ; Invalid: should be string
                         :email "alice@example.com"}}
-          result (executor/execute-mutation input fixtures/user-with-mutations-schema mock-db-conn)]
+          result (executor/execute-mutation input fixtures/user-with-mutations-schema parsed-schema mock-db-conn)]
       (is (false? (:success result)) "Success is false")
       (is (vector? (:errors result)) "Has errors vector")
       (is (seq (:errors result)) "Errors vector is not empty")
@@ -86,20 +92,22 @@
 ;; T058: Test missing required field error
 (deftest missing-required-field-test
   (testing "execute-mutation returns error for missing required fields"
-    (let [input {:operation :create
+    (let [parsed-schema (parser/parse-schema :user fixtures/user-with-mutations-schema)
+          input {:operation :create
                  :entity-type :user
                  :data {:username "alice"}}  ; Missing email
-          result (executor/execute-mutation input fixtures/user-with-mutations-schema mock-db-conn)]
+          result (executor/execute-mutation input fixtures/user-with-mutations-schema parsed-schema mock-db-conn)]
       (is (false? (:success result)) "Success is false")
       (is (seq (:errors result)) "Has errors"))))
 
 ;; T059: Test operation not allowed error
 (deftest operation-not-allowed-test
   (testing "execute-mutation returns error when operation not in allowed set"
-    (let [input {:operation :delete
+    (let [parsed-schema (parser/parse-schema :post fixtures/post-with-partial-mutations-schema)
+          input {:operation :delete
                  :entity-type :post  ; post-with-partial-mutations only allows :create :update
                  :entity-id (java.util.UUID/randomUUID)}
-          result (executor/execute-mutation input fixtures/post-with-partial-mutations-schema mock-db-conn)]
+          result (executor/execute-mutation input fixtures/post-with-partial-mutations-schema parsed-schema mock-db-conn)]
       (is (false? (:success result)) "Success is false")
       (is (seq (:errors result)) "Has errors")
       (is (some #(= :VALIDATION_ERROR (:code %)) (:errors result)) "Has validation error"))))

@@ -145,6 +145,30 @@
                         :error (.getMessage e)}
                        e))))))
 
+;; Helper function to preprocess enum values
+(defn- preprocess-enum-values
+  "Convert enum values to match Malli schema conventions.
+   GraphQL/Lacinia uses hyphens in enum keywords, but Malli schemas use underscores."
+  [data parsed-schema]
+  (reduce (fn [acc [field-name field-value]]
+            (let [field-def (first (filter #(= field-name (:name %)) (:fields parsed-schema)))
+                  is-enum? (and field-def (seq (:enum-values field-def)))]
+              (if is-enum?
+                ;; Convert enum value: replace hyphens with underscores
+                (let [converted-value (cond
+                                        (string? field-value)
+                                        (keyword (clojure.string/replace field-value "-" "_"))
+
+                                        (keyword? field-value)
+                                        (keyword (clojure.string/replace (name field-value) "-" "_"))
+
+                                        :else field-value)]
+                  (assoc acc field-name converted-value))
+                ;; Keep value as-is
+                (assoc acc field-name field-value))))
+          {}
+          data))
+
 ;; T071: Implement execute-mutation
 (defn execute-mutation
   "Execute a mutation with full validation and error handling.
@@ -152,23 +176,28 @@
    Args:
      mutation-input - Map with :operation, :entity-type, :data, :entity-id
      schema - The entity's Malli schema
+     parsed-schema - The parsed entity schema (from parser/parse-schema)
      db-conn - Datomic connection
 
    Returns:
      MutationResult map"
-  [mutation-input schema db-conn]
+  [mutation-input schema parsed-schema db-conn]
   (let [{:keys [operation entity-type entity-id data]} mutation-input
 
+        ;; Preprocess enum values: convert strings to keywords for Malli validation
+        preprocessed-data (when data (preprocess-enum-values data parsed-schema))
+        preprocessed-input (assoc mutation-input :data preprocessed-data)
+
         ;; Step 1: Validate input
-        validation (validate-mutation-input mutation-input schema)]
+        validation (validate-mutation-input preprocessed-input schema)]
 
     (if-not (:valid? validation)
       ;; Return validation errors
       (format-error-result operation entity-type (:errors validation))
 
-      ;; Step 2: Build transaction
+      ;; Step 2: Build transaction (use preprocessed input)
       (try
-        (let [tx-data (tx/mutation-input->transaction mutation-input schema)
+        (let [tx-data (tx/mutation-input->transaction preprocessed-input parsed-schema)
 
               ;; Step 3: Execute transaction
               tx-result (execute-transaction db-conn tx-data)

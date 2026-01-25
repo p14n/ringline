@@ -1,0 +1,233 @@
+# GraphQL Schema: Custom Scalars Example
+# This schema demonstrates the four custom scalar types in Ringline
+
+# ============================================================================
+# Custom Scalar Definitions
+# ============================================================================
+
+"""
+Date scalar represents a calendar date without time information.
+Format: ISO8601 date string (10 characters: YYYY-MM-DD)
+Example: "2024-01-15"
+"""
+scalar Date
+
+"""
+DateTime scalar represents a timestamp with date, time, and timezone information.
+Format: ISO8601 datetime string with timezone (approximately 25 characters: YYYY-MM-DDTHH:MM:SS±HH:MM)
+Example: "2024-01-15T14:30:00+05:00"
+Note: Timezone offset is required. Values without timezone will be rejected.
+"""
+scalar DateTime
+
+"""
+Decimal scalar represents a precise numeric value without floating-point errors.
+Format: String representation of a decimal number
+Precision limit: 38 total digits
+Scale limit: 10 digits after decimal point
+Example: "19.99", "1234567890.1234567890"
+"""
+scalar Decimal
+
+# ============================================================================
+# Enum Definitions
+# ============================================================================
+
+"""
+Task status enum (case-sensitive)
+"""
+enum TaskStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+"""
+Task priority enum (case-sensitive)
+"""
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+"""
+Product category enum (case-sensitive)
+"""
+enum ProductCategory {
+  ELECTRONICS
+  CLOTHING
+  FOOD
+  BOOKS
+}
+
+# ============================================================================
+# Object Types
+# ============================================================================
+
+"""
+Event entity demonstrating Date scalar usage
+"""
+type Event {
+  id: ID!
+  name: String!
+  eventDate: Date!
+  deadline: Date
+  createdAt: DateTime!
+}
+
+"""
+Task entity demonstrating DateTime and Enum scalar usage
+"""
+type Task {
+  id: ID!
+  title: String!
+  description: String
+  status: TaskStatus!
+  priority: TaskPriority!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  scheduledFor: DateTime
+  dueDate: Date
+}
+
+"""
+Product entity demonstrating Decimal scalar usage
+"""
+type Product {
+  id: ID!
+  name: String!
+  description: String
+  price: Decimal!
+  weightKg: Decimal
+  category: ProductCategory!
+  createdAt: DateTime!
+  launchDate: Date
+}
+
+# ============================================================================
+# Query Root
+# ============================================================================
+
+type Query {
+  """
+  Query events by date range
+  """
+  events(
+    eventDate: Date
+    afterDate: Date
+    beforeDate: Date
+  ): [Event!]!
+
+  """
+  Query tasks by status and priority
+  """
+  tasks(
+    status: TaskStatus
+    priority: TaskPriority
+    scheduledAfter: DateTime
+    scheduledBefore: DateTime
+  ): [Task!]!
+
+  """
+  Query products by category and price range
+  """
+  products(
+    category: ProductCategory
+    minPrice: Decimal
+    maxPrice: Decimal
+  ): [Product!]!
+}
+
+# ============================================================================
+# Mutation Root
+# ============================================================================
+
+type Mutation {
+  """
+  Create a new event
+  """
+  createEvent(
+    name: String!
+    eventDate: Date!
+    deadline: Date
+  ): Event!
+
+  """
+  Update an event
+  """
+  updateEvent(
+    id: ID!
+    name: String
+    eventDate: Date
+    deadline: Date
+  ): Event!
+
+  """
+  Delete an event
+  """
+  deleteEvent(id: ID!): Boolean!
+
+  """
+  Create a new task
+  """
+  createTask(
+    title: String!
+    description: String
+    status: TaskStatus!
+    priority: TaskPriority!
+    scheduledFor: DateTime
+    dueDate: Date
+  ): Task!
+
+  """
+  Update a task
+  """
+  updateTask(
+    id: ID!
+    title: String
+    description: String
+    status: TaskStatus
+    priority: TaskPriority
+    scheduledFor: DateTime
+    dueDate: Date
+  ): Task!
+
+  """
+  Delete a task
+  """
+  deleteTask(id: ID!): Boolean!
+
+  """
+  Create a new product
+  """
+  createProduct(
+    name: String!
+    description: String
+    price: Decimal!
+    weightKg: Decimal
+    category: ProductCategory!
+    launchDate: Date
+  ): Product!
+
+  """
+  Update a product
+  """
+  updateProduct(
+    id: ID!
+    name: String
+    description: String
+    price: Decimal
+    weightKg: Decimal
+    category: ProductCategory
+    launchDate: Date
+  ): Product!
+
+  """
+  Delete a product
+  """
+  deleteProduct(id: ID!): Boolean!
+}
+
