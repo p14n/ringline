@@ -18,7 +18,24 @@
             [malli.registry :as mr]
             [malli.experimental.time :as met]
             [datomic.api :as d]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.pprint :as pprint]))
+
+(defn create-entity-field-namespace-lookup
+  ([parsed]
+   (let [by-entity (->> parsed (map (juxt :schema-name identity)) (into {}))
+         lookups (->> by-entity
+                      (mapv (fn [[entity-name {:keys [fields]}]]
+                              (->> fields
+                                   (map (fn [{:keys [name properties]}]
+                                          (when-let [ref-to (-> properties :ringline/ref-to)]
+                                            [[entity-name name] (-> by-entity ref-to :properties :ringline/datomic-ns)])))
+                                   (remove nil?)
+                                   (vec))))
+                      (apply concat)
+                      (vec)
+                      (into {}))]
+     lookups)))
 
 ;; Malli Registry Setup
 
@@ -110,12 +127,14 @@
           ;; Attach custom resolvers if provided
           lacinia-final (if resolvers
                           (lacinia/attach-resolvers lacinia-with-mutations resolvers)
-                          lacinia-with-mutations)]
+                          lacinia-with-mutations)
+          namespace-lookup (create-entity-field-namespace-lookup parsed-schemas)]
 
       {:datomic datomic-schemas
        :lacinia lacinia-final
        :parsed parsed-schemas
-       :mutations mutation-defs})
+       :mutations mutation-defs
+       :namespace-lookup namespace-lookup})
     (catch Exception e
       (throw (ex-info "Failed to initialize framework"
                       {:schemas-map schemas-map
@@ -209,50 +228,51 @@
 
    Example:
      (create-resolver :User db-conn parsed-user-schema)"
-  [entity-type datomic-conn]
-  (fn resolver [context args _value]
-    (try
-      ;; Build query context from Lacinia, passing args explicitly
-      (let [query-ctx (converter/build-query-context context entity-type args)
+  ([entity-type datomic-conn]
+   (create-resolver entity-type datomic-conn {}))
+  ([entity-type datomic-conn namespace-lookup]
+   (fn resolver [context args _value]
+     (try
+       ;; Build query context from Lacinia, passing args explicitly
+       (let [query-ctx (converter/build-query-context context entity-type args)
 
-            ;; Convert to Datomic pull pattern with where clauses
-            pull-result (converter/pull-with-args query-ctx)
-            pattern (:pattern pull-result)
-            _ (println ">>>>>>>>" pattern query-ctx)
-            where-clauses (:where-clauses pull-result)]
+             ;; Convert to Datomic pull pattern with where clauses
+             pull-result (converter/pull-with-args query-ctx namespace-lookup)
+             pattern (:pattern pull-result)
+             where-clauses (:where-clauses pull-result)]
 
-        ;; Execute Datomic query
-        (if datomic-conn
-          (let [db (if (instance? datomic.db.Db datomic-conn)
-                     datomic-conn
-                     (d/db datomic-conn))
+         ;; Execute Datomic query
+         (if datomic-conn
+           (let [db (if (instance? datomic.db.Db datomic-conn)
+                      datomic-conn
+                      (d/db datomic-conn))
 
-                ;; Execute query with where clauses if present
-                entities (if (seq where-clauses)
-                           ;; Query with filtering
-                           (let [query-result (d/q {:find ['?e]
-                                                    :where where-clauses}
-                                                   db)
-                                 entity-ids (map first query-result)]
-                             (mapv #(d/pull db pattern %) entity-ids))
-                           ;; No filtering - return empty for now
-                           ;; (In real usage, would need entity-id from args)
-                           [])]
+                 ;; Execute query with where clauses if present
+                 entities (if (seq where-clauses)
+                            ;; Query with filtering
+                            (let [query-result (d/q {:find ['?e]
+                                                     :where where-clauses}
+                                                    db)
+                                  entity-ids (map first query-result)]
+                              (mapv #(d/pull db pattern %) entity-ids))
+                            ;; No filtering - return empty for now
+                            ;; (In real usage, would need entity-id from args)
+                            [])]
 
-            ;; Transform to GraphQL format
-            (if (= 1 (count entities))
-              (transformer/transform-with-selections (first entities) query-ctx)
-              (mapv #(transformer/transform-with-selections % query-ctx) entities)))
+             ;; Transform to GraphQL format
+             (if (= 1 (count entities))
+               (transformer/transform-with-selections (first entities) query-ctx namespace-lookup)
+               (mapv #(transformer/transform-with-selections % query-ctx namespace-lookup) entities)))
 
-          ;; No connection - return nil (useful for testing)
-          nil))
+           ;; No connection - return nil (useful for testing)
+           nil))
 
-      (catch Exception e
-        (throw (ex-info "Resolver execution failed"
-                        {:entity-type entity-type
-                         :args args
-                         :error (.getMessage e)}
-                        e))))))
+       (catch Exception e
+         (throw (ex-info "Resolver execution failed"
+                         {:entity-type entity-type
+                          :args args
+                          :error (.getMessage e)}
+                         e)))))))
 
 (defn attach-mutation-resolvers
   "Attach mutation resolvers to a Lacinia schema.

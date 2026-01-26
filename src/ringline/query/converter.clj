@@ -26,15 +26,16 @@
 (defn- keyword->namespaced
   "Convert a simple keyword to a namespaced keyword using entity type"
   [entity-type field-kw]
-  (keyword (str/lower-case (name entity-type)) (name field-kw)))
+  (keyword (some-> (if (keyword? entity-type)
+                     (name entity-type)
+                     entity-type)
+                   (str/lower-case))
+           (name field-kw)))
 
 (defn- qualified-field->simple
   "Convert a qualified field name (e.g., :User/name) to simple keyword (e.g., :name)"
   [qualified-kw]
-  (let [parts (clojure.string/split (name qualified-kw) #"/")]
-    (if (> (count parts) 1)
-      (keyword (second parts))
-      qualified-kw)))
+  (some-> qualified-kw (name) (keyword)))
 
 (defn- extract-selections-from-tree
   "Extract field selections from Lacinia selections-tree format.
@@ -59,7 +60,7 @@
                     (let [nested-tree (:selections nested-data)
                           ;; Convert qualified field name to simple keyword
                           simple-field-name (qualified-field->simple field-name)]
-                      [simple-field-name {:selections (extract-selections-from-tree nested-tree)
+                      [simple-field-name {:selections (extract-selections-from-tree nested-data)
                                           :nested-queries (extract-nested-from-tree nested-tree)}])))
                 selections-tree))))
 
@@ -158,23 +159,24 @@
 
 (defn- generate-nested-pull
   "Generate nested pull pattern for a relationship field"
-  [entity-type field-name nested-query]
+  [entity-type field-name nested-query namespace-lookup]
   (let [nested-selections (:selections nested-query)
         nested-nested (:nested-queries nested-query)
         ;; Assume relationship field name matches target entity (e.g., :posts -> :post)
-        target-entity (keyword (str/replace (name field-name) #"s$" ""))
+        target-entity (or (get namespace-lookup [entity-type field-name])
+                          (keyword (str/replace (name field-name) #"s$" "")))
         namespaced-fields (mapv #(keyword->namespaced target-entity %) nested-selections)
         ;; Recursively handle deeper nesting
         nested-pulls (when (seq nested-nested)
                        (mapv (fn [[nested-field nested-data]]
-                               (generate-nested-pull target-entity nested-field nested-data))
+                               (generate-nested-pull target-entity nested-field nested-data namespace-lookup))
                              nested-nested))]
     {(keyword->namespaced entity-type field-name)
      (vec (concat namespaced-fields nested-pulls))}))
 
 (defn- build-pull-pattern
   "Build Datomic pull pattern from query context"
-  [query-ctx]
+  [query-ctx namespace-lookup]
   (let [entity-type (:entity-type query-ctx)
         selections (:selections query-ctx)
         nested-queries (:nested-queries query-ctx)
@@ -183,7 +185,7 @@
         namespaced-fields (mapv #(keyword->namespaced entity-type %) simple-fields)
         ;; Generate nested pulls for relationships
         nested-pulls (mapv (fn [[field-name nested-query]]
-                             (generate-nested-pull entity-type field-name nested-query))
+                             (generate-nested-pull entity-type field-name nested-query namespace-lookup))
                            nested-queries)]
     (vec (concat namespaced-fields nested-pulls))))
 
@@ -196,7 +198,7 @@
    Returns:
      PullPattern map with :pattern vector"
   [query-context]
-  (let [pattern (build-pull-pattern query-context)
+  (let [pattern (build-pull-pattern query-context {})
         result {:pattern pattern}]
     ;; Validate the result
     (when-not (m/validate PullPattern result)
@@ -230,8 +232,8 @@
    
    Returns:
      Map with :pattern (pull pattern vector) and :where-clauses (datalog clauses)"
-  [query-context]
-  (let [pattern (build-pull-pattern query-context)
+  [query-context namespace-lookup]
+  (let [pattern (build-pull-pattern query-context namespace-lookup)
         where-clauses (build-where-clauses query-context)
         result {:pattern pattern
                 :where-clauses where-clauses}]

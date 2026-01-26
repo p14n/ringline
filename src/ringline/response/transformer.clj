@@ -141,7 +141,7 @@
 
 (defn- filter-by-selections
   "Filter entity fields to only include selected fields"
-  [entity selections nested-queries entity-ns]
+  [entity selections nested-queries entity-ns namespace-lookup]
   (let [selected-fields (set selections)]
     (into {}
           (keep (fn [field-name]
@@ -154,13 +154,14 @@
                           (let [nested-selections (:selections nested-query)
                                 nested-nested (:nested-queries nested-query)
                                 ;; Infer target entity namespace from field name
-                                target-ns (str/replace (name field-name) #"s$" "")
+                                target-ns (or (get namespace-lookup [(keyword entity-ns) simple-field])
+                                              (str/replace (name field-name) #"s$" ""))
                                 transformed-value (cond
                                                     (vector? value)
-                                                    (mapv #(filter-by-selections % nested-selections nested-nested target-ns) value)
+                                                    (mapv #(filter-by-selections % nested-selections nested-nested target-ns namespace-lookup) value)
 
                                                     (map? value)
-                                                    (filter-by-selections value nested-selections nested-nested target-ns)
+                                                    (filter-by-selections value nested-selections nested-nested target-ns namespace-lookup)
 
                                                     :else (transform-value value))]
                             [simple-field transformed-value])
@@ -177,10 +178,10 @@
    
    Returns:
      Map with only selected fields, using simple keywords"
-  [datomic-entity query-context]
+  [datomic-entity query-context namespace-lookup]
   (let [entity-type (:entity-type query-context)
         entity-ns (str/lower-case (name entity-type))
         selections (:selections query-context)
         nested-queries (:nested-queries query-context)]
-    (filter-by-selections datomic-entity selections nested-queries entity-ns)))
+    (filter-by-selections datomic-entity selections nested-queries entity-ns namespace-lookup)))
 
