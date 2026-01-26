@@ -181,7 +181,6 @@
   (mapcat :relationships parsed-all)
   ; => [{:field :posts :source :user :target :post :cardinality :many ...}
   ;     {:field :author :source :post :target :user :cardinality :one ...}]
-
   )
 
 (defn- resolve-relationship-target
@@ -299,6 +298,5 @@
   ;; For custom operations, see:
   ;; - ringline.schema.lacinia (generate-schemas function)
   ;; - ringline.core (init-framework function)
-
   )
 

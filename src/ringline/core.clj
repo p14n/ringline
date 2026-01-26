@@ -16,6 +16,7 @@
             [ringline.mutation.executor :as mutation-executor]
             [malli.core :as m]
             [malli.registry :as mr]
+            [malli.util :as mu]
             [malli.experimental.time :as met]
             [datomic.api :as d]
             [clojure.string :as str]
@@ -53,7 +54,8 @@
    (mr/composite-registry
     (m/default-schemas)
     (met/schemas)
-    (scalars/custom-schemas))))
+    (scalars/custom-schemas)
+    (mr/var-registry))))
 
 ;; Framework initialization
 

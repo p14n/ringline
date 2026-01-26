@@ -23,8 +23,7 @@
     :ringline/searchable [:id]}
    [:id :string]
    [:name :string]
-   [:home_planet {:optional true
-                  :ringline/ref-to :planet} :uuid]])
+   [:home_planet {:optional true :ringline/ref-to :planet} #'planet]])
 
 ;; Droid schema - represents a droid character in Star Wars
 (def droid-schema
