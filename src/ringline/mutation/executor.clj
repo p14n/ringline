@@ -6,7 +6,8 @@
   (:require [malli.core :as m]
             [ringline.mutation.parser :as parser]
             [ringline.mutation.transaction :as tx]
-            [datomic.api]))
+            [datomic.api]
+            [spyscope.core]))
 
 ;; T065: Implement check-operation-allowed
 (defn check-operation-allowed
@@ -64,12 +65,12 @@
 
     ;; Validate input data against derived schema (for create/update)
     (when (and data (#{:create :update} operation))
-      (let [input-schema (parser/derive-input-schema schema operation)
+      (let [input-schema #spy/d (parser/derive-input-schema schema operation)
             ;; For update operations, merge entity-id into data for validation
             ;; (the input schema expects :id to be present)
             validation-data (if (and (= operation :update) (:entity-id mutation-input))
-                             (assoc data :id (:entity-id mutation-input))
-                             data)]
+                              (assoc data :id (:entity-id mutation-input))
+                              data)]
         (when-not (m/validate input-schema validation-data)
           (let [explanation (m/explain input-schema validation-data)]
             (swap! errors conj
@@ -141,9 +142,9 @@
         result)
       (catch Exception e
         (throw (ex-info "Datomic transaction failed"
-                       {:tx-data tx-data
-                        :error (.getMessage e)}
-                       e))))))
+                        {:tx-data tx-data
+                         :error (.getMessage e)}
+                        e))))))
 
 ;; Helper function to preprocess enum values
 (defn- preprocess-enum-values
@@ -198,10 +199,12 @@
       ;; Step 2: Build transaction (use preprocessed input)
       (try
         (let [tx-data (tx/mutation-input->transaction preprocessed-input parsed-schema)
+              _ (println ">>>>" tx-data)
 
               ;; Step 3: Execute transaction
               tx-result (execute-transaction db-conn tx-data)
 
+              _ (println "<<<<<" tx-result)
               ;; Step 4: Format success result
               result-entity-id (or entity-id
                                    (when (= operation :create)
@@ -214,8 +217,8 @@
         (catch Exception e
           ;; Handle transaction errors
           (let [cause-msg (if-let [cause (.getCause e)]
-                           (.getMessage cause)
-                           (.getMessage e))]
+                            (.getMessage cause)
+                            (.getMessage e))]
             (format-error-result
              operation
              entity-type
@@ -308,6 +311,5 @@
 
   (executor/build-validation-error "Invalid field" :username 123)
   ;; => {:code :VALIDATION_ERROR :message "Invalid field" :field :username :value 123}
-
   )
 

@@ -15,29 +15,31 @@
             [com.walmartlabs.lacinia.schema :as lacinia-schema]
             [com.walmartlabs.lacinia.util :as util]
             [datomic.api :as d]
-            [ringline.core :as core]))
+            [spyscope.core]))
 
 ;; Datomic database setup
 (def db-uri "datomic:mem://starwars-example")
 
 (def initial-planets [{:db/id "Tatooine"
+                       :planet/id "TTOO"
                        :planet/name "Tatooine"}
                       {:db/id "Alderaan"
+                       :planet/id "ALDE"
                        :planet/name "Alderaan"}])
 
 (def initial-humans [{:db/id (d/tempid :db.part/user)
-                      :human/id "1000"
+                      :human/id (d/squuid)
                       :human/name "Luke Skywalker"
                       :human/home_planet "Tatooine"}
                      {:db/id (d/tempid :db.part/user)
-                      :human/id "1001"
+                      :human/id (d/squuid)
                       :human/name "Darth Vader"
                       :human/home_planet "Tatooine"}
                      {:db/id (d/tempid :db.part/user)
-                      :human/id "1002"
+                      :human/id (d/squuid)
                       :human/name "Han Solo"}
                      {:db/id (d/tempid :db.part/user)
-                      :human/id "1003"
+                      :human/id (d/squuid)
                       :human/name "Leia Organa"
                       :human/home_planet "Alderaan"}])
 
@@ -62,7 +64,7 @@
                      ;; Attach resolvers
                      (util/inject-resolvers {:queries/human (ringline/create-resolver :human conn namespace-lookup)
                                              :queries/droid (ringline/create-resolver :droid conn namespace-lookup)})
-                     (core/attach-mutation-resolvers schema/schemas conn)
+                     (ringline/attach-mutation-resolvers schema/schemas conn)
                      (lacinia-schema/compile))]
 
       @(d/transact conn tx-data)

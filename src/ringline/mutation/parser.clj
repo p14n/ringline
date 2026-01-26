@@ -4,7 +4,8 @@
    This namespace extracts mutation metadata from entity schemas and derives
    input schemas for create, update, and delete operations."
   (:require [malli.core :as m]
-            [ringline.schema.properties :as props]))
+            [ringline.schema.properties :as props]
+            [spyscope.core]))
 
 ;; T013: Implement get-mutation-property
 (defn get-mutation-property
@@ -18,6 +19,37 @@
   [schema]
   (let [properties (m/properties schema)]
     (props/get-mutations properties)))
+
+(defn field-type-from-schema-var
+  [schema-var field]
+  (->> (deref schema-var)
+       (filter vector?)
+       (map (juxt first last))
+       (into {})
+       field))
+
+#_(let [schema-type (m/type field-schema)]
+    (if (= schema-type :malli.core/schema)
+      ;; Dereference schema reference using m/form
+      (let [form (m/form field-schema)]
+        (cond
+          (keyword? form) form
+          (var? form) (field-type-from-schema-var form :id)
+          :else schema-type))
+      schema-type))
+
+(defn is-schema-var [t]
+  (and (= (m/type t) :malli.core/schema)
+       (var? (m/form t))))
+
+(defn correct-field-type [f]
+  (println "[][]" f (last f) (type (last f)))
+  (if (is-schema-var (last f))
+    (-> (drop-last f)
+        (vec)
+        (conj (field-type-from-schema-var (m/form (last f)) :id)))
+    f))
+
 
 ;; T014: Implement derive-input-schema
 (defn derive-input-schema
@@ -36,16 +68,18 @@
   [entity-schema operation]
   (when-not (#{:create :update :delete} operation)
     (throw (ex-info "Invalid operation type" {:operation operation})))
-  
+
   (let [children (m/children entity-schema)
         fields (filter vector? children)]  ; Filter out property maps
-    
+
     (case operation
       :create
       ;; Create: all fields except :id (required by default)
       (into [:map]
-            (filter #(not= :id (first %)) fields))
-      
+            #spy/d (->> fields
+                        (filter #(not= :id (first %)))
+                        (map correct-field-type)))
+
       :update
       ;; Update: :id is required, all other fields are optional
       (into [:map]
@@ -66,7 +100,7 @@
                                        (assoc props :optional true))]
                      [field-name final-props schema]))
                  fields))
-      
+
       :delete
       ;; Delete: only :id field
       [:map
@@ -91,17 +125,17 @@
   [entity-type schema]
   (when-not (vector? schema)
     (throw (ex-info "Invalid schema format: must be a vector" {:schema schema})))
-  
+
   (let [operations (get-mutation-property schema)
         result {:entity-type entity-type
                 :operations operations}]
     (cond-> result
       (contains? operations :create)
       (assoc :create-schema (derive-input-schema schema :create))
-      
+
       (contains? operations :update)
       (assoc :update-schema (derive-input-schema schema :update))
-      
+
       (contains? operations :delete)
       (assoc :delete-schema (derive-input-schema schema :delete)))))
 
@@ -159,6 +193,5 @@
   ;;     :update-schema [:map [:title {:optional true} :string] ...]
   ;;     ;; No :delete-schema
   ;;     }
-
   )
 

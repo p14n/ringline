@@ -20,7 +20,8 @@
             [malli.experimental.time :as met]
             [datomic.api :as d]
             [clojure.string :as str]
-            [clojure.pprint :as pprint]))
+            [clojure.pprint :as pprint]
+            [spyscope.core]))
 
 (defn create-entity-field-namespace-lookup
   ([parsed]
@@ -175,9 +176,9 @@
         ;; Extract input from args
         (let [input-data-raw (get args :input)
               ;; Convert string ID to UUID if present
-              input-data (if-let [id-str (:id input-data-raw)]
-                           (assoc input-data-raw :id (java.util.UUID/fromString id-str))
-                           input-data-raw)
+              input-data #spy/d (if-let [id-str (:id input-data-raw)]
+                                  (assoc input-data-raw :id (java.util.UUID/fromString id-str))
+                                  input-data-raw)
               entity-id (:id input-data)
 
               ;; Build mutation input map

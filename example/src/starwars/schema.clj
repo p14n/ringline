@@ -11,7 +11,7 @@
 
 (def planet
   [:map {:ringline/datomic-ns "planet"}
-   [:id :uuid]
+   [:id :string]
    [:name :string]])
 
 ;; Human schema - represents a human character in Star Wars
@@ -20,8 +20,8 @@
    {:ringline/datomic-ns "human"
     :ringline/query-root true
     :ringline/mutations #{:create :update :delete}
-    :ringline/searchable [:id]}
-   [:id :string]
+    :ringline/searchable [:id :name]}
+   [:id :uuid]
    [:name :string]
    [:home_planet {:optional true :ringline/ref-to :planet} #'planet]])
 

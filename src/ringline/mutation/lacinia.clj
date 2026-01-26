@@ -81,6 +81,14 @@
     :else
     (types/malli-type->graphql-type malli-type)))
 
+(defn field-type-from-schema-var
+  [schema-var field]
+  (->> (deref schema-var)
+       (filter vector?)
+       (map (juxt first last))
+       (into {})
+       field))
+
 ;; T031: Implement generate-input-object
 (defn generate-input-object
   "Generate Lacinia input object type from Malli schema.
@@ -117,9 +125,10 @@
                                        (if (= schema-type :malli.core/schema)
                                          ;; Dereference schema reference using m/form
                                          (let [form (m/form field-schema)]
-                                           (if (keyword? form)
-                                             form
-                                             schema-type))
+                                           (cond
+                                             (keyword? form) form
+                                             (var? form) (field-type-from-schema-var form :id)
+                                             :else schema-type))
                                          schema-type)))
                         optional? (:optional options false)
                         ;; Field names are used as-is (no conversion)
@@ -252,6 +261,5 @@
   (lacinia/malli-type->graphql-type :int)     ;; => Int
   (lacinia/malli-type->graphql-type :uuid)    ;; => ID
   (lacinia/malli-type->graphql-type :boolean) ;; => Boolean
-
   )
 

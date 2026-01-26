@@ -5,7 +5,9 @@
    transaction maps with proper tempids, lookup refs, and namespaced attributes."
   (:require [malli.core :as m]
             [ringline.schema.properties :as props]
-            [ringline.schema.scalars :as scalars]))
+            [ringline.schema.scalars :as scalars]
+            [datomic.api :as da]
+            [spyscope.core]))
 
 ;; T047: Implement generate-tempid
 (defn generate-tempid
@@ -125,6 +127,13 @@
   (when-let [field (first (filter #(= field-name (:name %)) (:fields parsed-schema)))]
     (:type field)))
 
+(defn id-type [schema]
+  (->> schema
+       :fields
+       (filter #(-> % :name (= :id)))
+       (first)
+       :type))
+
 ;; T051: Implement build-create-transaction
 (defn build-create-transaction
   "Build Datomic transaction map for creating a new entity.
@@ -138,16 +147,19 @@
      Transaction map with tempid and namespaced attributes"
   [entity-type input-data parsed-schema]
   (let [datomic-ns (or (get-in parsed-schema [:properties :ringline/datomic-ns]) entity-type)
+        id-type (id-type parsed-schema)
         tempid (generate-tempid)
         ;; Generate a new UUID for the entity's :id field
-        entity-id (java.util.UUID/randomUUID)
+        entity-id (case id-type
+                    :uuid (da/squuid)
+                    (str (java.util.UUID/randomUUID)))
         ;; Convert all input fields to namespaced attributes with value conversion
         namespaced-data (into {}
                               (map (fn [[k v]]
-                                     (let [field-type (get-field-type parsed-schema k)
+                                     (let [field-type #spy/d (get-field-type parsed-schema k)
                                            converted-value (if field-type
-                                                            (convert-value field-type v)
-                                                            v)]
+                                                             (convert-value field-type v)
+                                                             v)]
                                        [(convert-field-name datomic-ns k) converted-value]))
                                    input-data))]
     (assoc namespaced-data
@@ -176,8 +188,8 @@
                                     (map (fn [[k v]]
                                            (let [field-type (get-field-type parsed-schema k)
                                                  converted-value (if field-type
-                                                                  (convert-value field-type v)
-                                                                  v)]
+                                                                   (convert-value field-type v)
+                                                                   v)]
                                              [(convert-field-name datomic-ns k) converted-value]))))
                               input-data)]
     (assoc namespaced-data :db/id lookup-ref)))
@@ -295,6 +307,5 @@
 
   (tx/convert-value :string "alice")
   ;; => "alice"
-
   )
 

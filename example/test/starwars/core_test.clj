@@ -53,10 +53,9 @@
 (deftest example-test
 
   (testing "Query for human by ID returns Luke Skywalker with all fields"
-    (let [result (graphql-request "{ human(id: \"1000\") { id name home_planet { name } } }")]
+    (let [result (graphql-request "{ human(name: \"Luke Skywalker\") { id name home_planet { name } } }")]
       (is (nil? (:errors result)) "No errors in response")
-      (is (= "1000"
-             (get-in result [:data :human :id]))
+      (is (not (nil? (get-in result [:data :human :id])))
           "Returns Luke's ID")
       (is (= "Luke Skywalker"
              (get-in result [:data :human :name]))
@@ -76,5 +75,18 @@
           "Returns R2-D2's name")
       (is (= "Astromech"
              (get-in result [:data :droid :primary_function]))
-          "Returns R2-D2's primary function"))))
+          "Returns R2-D2's primary function")))
+
+  (testing "Adding a human returns new human with new id"
+    (let [result (graphql-request "mutation {
+                    createHuman(input:  {
+                      name: \"Dean\", home_planet: \"TTOO\"
+                    }) { id }}")]
+      (is (nil? (:errors result)) "No errors in response")
+      (is (= "2000"
+             (get-in result [:data :createHuman :id]))
+          "Returns new ID")
+      (is (= "Tatooine"
+             (get-in result [:data :createHuman :home_planet :name]))
+          "Returns new home planet"))))
 
