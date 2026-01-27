@@ -198,7 +198,7 @@
 
       ;; Step 2: Build transaction (use preprocessed input)
       (try
-        (let [tx-data (tx/mutation-input->transaction preprocessed-input parsed-schema)
+        (let [tx-data (tx/mutation-input->transaction preprocessed-input parsed-schema schema)
               _ (println ">>>>" tx-data)
 
               ;; Step 3: Execute transaction
@@ -226,90 +226,90 @@
                :message (str "Datomic transaction failed: " cause-msg)}])))))))
 
 ;; Rich comment block with REPL examples
-(comment
-  ;; Example: Execute mutations
-  (require '[ringline.mutation.executor :as executor])
+#_(comment
+    ;; Example: Execute mutations
+    (require '[ringline.mutation.executor :as executor])
 
-  ;; Define a schema
-  (def user-schema
-    [:map
-     {:ringline/datomic-ns :user
-      :ringline/mutations #{:create :update :delete}}
-     [:id :uuid]
-     [:username :string]
-     [:email :string]
-     [:created-at :int]])
+    ;; Define a schema
+    (def user-schema
+      [:map
+       {:ringline/datomic-ns :user
+        :ringline/mutations #{:create :update :delete}}
+       [:id :uuid]
+       [:username :string]
+       [:email :string]
+       [:created-at :int]])
 
-  ;; Mock DB connection
-  (def mock-conn {:db-after {}})
+    ;; Mock DB connection
+    (def mock-conn {:db-after {}})
 
-  ;; Execute create mutation
-  (def create-input
-    {:operation :create
-     :entity-type :user
-     :data {:username "alice"
-            :email "alice@example.com"
-            :created-at 1234567890}})
+    ;; Execute create mutation
+    (def create-input
+      {:operation :create
+       :entity-type :user
+       :data {:username "alice"
+              :email "alice@example.com"
+              :created-at 1234567890}})
 
-  (executor/execute-mutation create-input user-schema mock-conn)
-  ;; => {:success true
-  ;;     :operation :create
-  ;;     :entity-type :user
-  ;;     :data {:username "alice" :email "alice@example.com" :created-at 1234567890}
-  ;;     :entity-id #uuid "..."
-  ;;     :timestamp 1234567890123}
+    (executor/execute-mutation create-input user-schema mock-conn)
+    ;; => {:success true
+    ;;     :operation :create
+    ;;     :entity-type :user
+    ;;     :data {:username "alice" :email "alice@example.com" :created-at 1234567890}
+    ;;     :entity-id #uuid "..."
+    ;;     :timestamp 1234567890123}
 
-  ;; Execute update mutation
-  (def update-input
-    {:operation :update
-     :entity-type :user
-     :entity-id #uuid "123e4567-e89b-12d3-a456-426614174000"
-     :data {:email "newemail@example.com"}})
+    ;; Execute update mutation
+    (def update-input
+      {:operation :update
+       :entity-type :user
+       :entity-id #uuid "123e4567-e89b-12d3-a456-426614174000"
+       :data {:email "newemail@example.com"}})
 
-  (executor/execute-mutation update-input user-schema mock-conn)
-  ;; => {:success true
-  ;;     :operation :update
-  ;;     :entity-type :user
-  ;;     :data {:email "newemail@example.com"}
-  ;;     :entity-id #uuid "123e4567-e89b-12d3-a456-426614174000"
-  ;;     :timestamp 1234567890123}
+    (executor/execute-mutation update-input user-schema mock-conn)
+    ;; => {:success true
+    ;;     :operation :update
+    ;;     :entity-type :user
+    ;;     :data {:email "newemail@example.com"}
+    ;;     :entity-id #uuid "123e4567-e89b-12d3-a456-426614174000"
+    ;;     :timestamp 1234567890123}
 
-  ;; Execute delete mutation
-  (def delete-input
-    {:operation :delete
-     :entity-type :user
-     :entity-id #uuid "123e4567-e89b-12d3-a456-426614174000"})
+    ;; Execute delete mutation
+    (def delete-input
+      {:operation :delete
+       :entity-type :user
+       :entity-id #uuid "123e4567-e89b-12d3-a456-426614174000"})
 
-  (executor/execute-mutation delete-input user-schema mock-conn)
-  ;; => {:success true
-  ;;     :operation :delete
-  ;;     :entity-type :user
-  ;;     :data nil
-  ;;     :entity-id #uuid "123e4567-e89b-12d3-a456-426614174000"
-  ;;     :timestamp 1234567890123}
+    (executor/execute-mutation delete-input user-schema mock-conn)
+    ;; => {:success true
+    ;;     :operation :delete
+    ;;     :entity-type :user
+    ;;     :data nil
+    ;;     :entity-id #uuid "123e4567-e89b-12d3-a456-426614174000"
+    ;;     :timestamp 1234567890123}
 
-  ;; Validation error example
-  (def invalid-input
-    {:operation :create
-     :entity-type :user
-     :data {:username 123  ; Invalid: should be string
-            :email "alice@example.com"}})
+    ;; Validation error example
+    (def invalid-input
+      {:operation :create
+       :entity-type :user
+       :data {:username 123  ; Invalid: should be string
+              :email "alice@example.com"}})
 
-  (executor/execute-mutation invalid-input user-schema mock-conn)
-  ;; => {:success false
-  ;;     :operation :create
-  ;;     :entity-type :user
-  ;;     :errors [{:code :VALIDATION_ERROR :message "..."}]
-  ;;     :timestamp 1234567890123}
+    (executor/execute-mutation invalid-input user-schema mock-conn)
+    ;; => {:success false
+    ;;     :operation :create
+    ;;     :entity-type :user
+    ;;     :errors [{:code :VALIDATION_ERROR :message "..."}]
+    ;;     :timestamp 1234567890123}
 
-  ;; Helper functions
-  (executor/check-operation-allowed :create user-schema)
-  ;; => true
+    ;; Helper functions
+    (executor/check-operation-allowed :create user-schema)
+    ;; => true
 
-  (executor/validate-mutation-input create-input user-schema)
-  ;; => {:valid? true :errors []}
+    (executor/validate-mutation-input create-input user-schema)
+    ;; => {:valid? true :errors []}
 
-  (executor/build-validation-error "Invalid field" :username 123)
-  ;; => {:code :VALIDATION_ERROR :message "Invalid field" :field :username :value 123}
-  )
+    (executor/build-validation-error "Invalid field" :username 123)
+    ;; => {:code :VALIDATION_ERROR :message "Invalid field" :field :username :value 123}
+    )
 
