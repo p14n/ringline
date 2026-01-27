@@ -86,6 +86,7 @@
   (let [{:keys [schema conn]} (core/create-graphql-system!)
         server (jetty/run-jetty (app schema conn) {:port port :join? false})]
     (swap! server-state assoc :server server)
+    (swap! server-state assoc :conn conn)
     (println (str "\n=== Ringline GraphQL Server Started ==="))
     (println (str "GraphQL endpoint: http://localhost:" port "/graphql"))
     (println (str "GraphiQL UI:      http://localhost:" port "/graphiql"))

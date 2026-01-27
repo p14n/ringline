@@ -27,13 +27,14 @@
   ([parsed]
    (let [by-entity (->> parsed (map (juxt :schema-name identity)) (into {}))
          lookups (->> by-entity
-                      (mapv (fn [[entity-name {:keys [fields]}]]
+                      (mapv (fn [[entity-name {:keys [fields properties]}]]
                               (->> fields
-                                   (map (fn [{:keys [name properties]}]
-                                          (when-let [ref-to (-> properties :ringline/ref-to)]
-                                            [[entity-name name] (-> by-entity ref-to :properties :ringline/datomic-ns)])))
+                                   (map (fn [field]
+                                          (when-let [ref-to (-> field :properties :ringline/ref-to)]
+                                            [[entity-name (:name field)] (-> by-entity ref-to :properties :ringline/datomic-ns)])))
                                    (remove nil?)
-                                   (vec))))
+                                   (vec)
+                                   (concat [[entity-name (-> properties :ringline/datomic-ns)]]))))
                       (apply concat)
                       (vec)
                       (into {}))]
@@ -168,7 +169,7 @@
 
    Example:
      (create-mutation-resolver :User :create db-conn user-schema)"
-  [entity-type operation datomic-conn schema]
+  [entity-type operation datomic-conn schema namespace-lookup]
   ;; Parse the schema once when creating the resolver
   (let [parsed-schema (parser/parse-schema entity-type schema)]
     (fn resolver [context args _value]
@@ -199,8 +200,21 @@
 
               ;; Create/Update return entity data
               ;; Convert UUID to string for GraphQL ID type
-              (merge (:data result)
-                     {:id (str (:entity-id result))}))
+              (let [query-ctx (converter/build-query-context context entity-type args)
+                    ;; Convert to Datomic pull pattern with where clauses
+                    pull-result (converter/pull-with-args query-ctx namespace-lookup)
+                    pattern (:pattern pull-result)
+                    db (if (instance? datomic.db.Db datomic-conn)
+                         datomic-conn
+                         (d/db datomic-conn))
+                    {:keys [entity-id entity-type]} result
+                    query-result (d/pull db pattern [(keyword (entity-type namespace-lookup) "id") entity-id])
+                    transformed (transformer/transform-with-selections query-result query-ctx namespace-lookup)
+                    _ (println "???????" result query-result)]
+                ;(println "???????" result dbid query-result)
+                transformed
+                #_(merge (:data result)
+                         {:id (str (:entity-id result))})))
 
             ;; On error, attach errors to Lacinia context and return nil
             ;; This allows GraphQL to return errors in the response without throwing
@@ -253,9 +267,9 @@
                  ;; Execute query with where clauses if present
                  entities (if (seq where-clauses)
                             ;; Query with filtering
-                            (let [query-result (d/q {:find ['?e]
-                                                     :where where-clauses}
-                                                    db)
+                            (let [query-result #spy/d (d/q {:find ['?e]
+                                                            :where where-clauses}
+                                                           db)
                                   entity-ids (map first query-result)]
                               (mapv #(d/pull db pattern %) entity-ids))
                             ;; No filtering - return empty for now
@@ -293,7 +307,7 @@
 
    Example:
      (attach-mutation-resolvers lacinia-schema {:user user-schema} db-conn)"
-  [lacinia-schema schemas-map datomic-conn]
+  [lacinia-schema schemas-map datomic-conn namespace-lookup]
   (if-let [mutations (:mutations lacinia-schema)]
     (let [;; For each mutation, attach a resolver
           mutations-with-resolvers
@@ -323,7 +337,8 @@
                                          entity-key
                                          operation
                                          datomic-conn
-                                         schema)))
+                                         schema
+                                         namespace-lookup)))
                  ;; No schema found, keep mutation as-is
                  (assoc acc mutation-name mutation-def))))
            {}
@@ -427,11 +442,12 @@
     (core/attach-mutation-resolvers
      (:lacinia fw-with-mutations)
      {:user user-with-mutations}
-     db-conn))
+     db-conn
+     {}))
 
   ;; Create individual mutation resolver
   (def create-user-resolver
-    (core/create-mutation-resolver :user :create db-conn user-with-mutations))
+    (core/create-mutation-resolver :user :create db-conn user-with-mutations {}))
 
   ;; Use resolver in Lacinia
   ;; (create-user-resolver context {:input {:username "alice" :email "alice@example.com"}} nil)

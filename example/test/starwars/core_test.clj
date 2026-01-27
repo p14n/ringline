@@ -36,7 +36,8 @@
 (defn stop-test-server!
   "Stop the HTTP server after testing"
   []
-  (server/stop-server!))
+  (server/stop-server!)
+  (server/shutdown-database!))
 
 (defn server-fixture
   "Fixture to start and stop the server around all tests"
@@ -80,13 +81,25 @@
   (testing "Adding a human returns new human with new id"
     (let [result (graphql-request "mutation {
                     createHuman(input:  {
-                      name: \"Dean\", home_planet: \"TTOO\"
-                    }) { id }}")]
+                      name: \"Dean\", home_planet: \"ALDE\"
+                    }) { id home_planet { name } }}")]
       (is (nil? (:errors result)) "No errors in response")
-      (is (= "2000"
-             (get-in result [:data :createHuman :id]))
+      (is (not (nil?
+                (get-in result [:data :createHuman :id])))
           "Returns new ID")
-      (is (= "Tatooine"
+      (is (= "Alderaan"
              (get-in result [:data :createHuman :home_planet :name]))
-          "Returns new home planet"))))
+          "Returns new home planet")))
+
+  (testing "Query for human just created"
+    (let [result (graphql-request "{ human(name: \"Dean\") { id name home_planet { name } } }")]
+      (is (nil? (:errors result)) "No errors in response")
+      (is (not (nil? (get-in result [:data :human :id])))
+          "Returns ID")
+      (is (= "Dean"
+             (get-in result [:data :human :name]))
+          "Returns Dean's name")
+      (is (= "Alderaan"
+             (get-in result [:data :human :home_planet :name]))
+          "Returns Dean's home planet"))))
 

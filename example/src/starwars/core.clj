@@ -64,9 +64,9 @@
                      ;; Attach resolvers
                      (util/inject-resolvers {:queries/human (ringline/create-resolver :human conn namespace-lookup)
                                              :queries/droid (ringline/create-resolver :droid conn namespace-lookup)})
-                     (ringline/attach-mutation-resolvers schema/schemas conn)
+                     (ringline/attach-mutation-resolvers schema/schemas conn namespace-lookup)
                      (lacinia-schema/compile))]
-
+      (println "DATOMIC!!!" tx-data)
       @(d/transact conn tx-data)
       @(d/transact conn (concat initial-planets initial-humans initial-droids))
 
