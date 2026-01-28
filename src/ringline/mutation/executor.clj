@@ -6,8 +6,7 @@
   (:require [malli.core :as m]
             [ringline.mutation.parser :as parser]
             [ringline.mutation.transaction :as tx]
-            [datomic.api]
-            [spyscope.core]))
+            [datomic.api]))
 
 ;; T065: Implement check-operation-allowed
 (defn check-operation-allowed
@@ -65,7 +64,7 @@
 
     ;; Validate input data against derived schema (for create/update)
     (when (and data (#{:create :update} operation))
-      (let [input-schema #spy/d (parser/derive-input-schema schema operation)
+      (let [input-schema (parser/derive-input-schema schema operation)
             ;; For update operations, merge entity-id into data for validation
             ;; (the input schema expects :id to be present)
             validation-data (if (and (= operation :update) (:entity-id mutation-input))
@@ -199,19 +198,16 @@
       ;; Step 2: Build transaction (use preprocessed input)
       (try
         (let [tx-data (tx/mutation-input->transaction preprocessed-input parsed-schema schema)
-              _ (println ">>>>" tx-data)
 
               ;; Step 3: Execute transaction
-              tx-result (execute-transaction db-conn tx-data)
+              _tx-result (execute-transaction db-conn tx-data)
 
-              _ (println "<<<<<" tx-result)
               ;; Step 4: Format success result
               result-entity-id (or entity-id
                                    (when (= operation :create)
                                      ;; Extract generated UUID from transaction
                                      (get-in tx-data [(keyword (name entity-type) "id")])))
-              result-data (when (#{:create :update} operation) data)
-              _ (println "<<<<<!!!" result-entity-id)]
+              result-data (when (#{:create :update} operation) data)]
 
           (format-success-result operation entity-type result-data result-entity-id))
 

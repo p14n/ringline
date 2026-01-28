@@ -14,7 +14,8 @@
   (:require [clojure.test :refer [deftest testing is use-fixtures]]
             [starwars.server :as server]
             [babashka.http-client :as http]
-            [babashka.json :as json]))
+            [babashka.json :as json]
+            [spyscope.core]))
 
 (def test-port 8765)
 (def graphql-url (str "http://localhost:" test-port "/graphql"))
@@ -91,15 +92,28 @@
              (get-in result [:data :createHuman :home_planet :name]))
           "Returns new home planet")))
 
-  (testing "Query for human just created"
-    (let [result (graphql-request "{ human(name: \"Dean\") { id name home_planet { name } } }")]
+  (let [result (graphql-request "{ human(name: \"Dean\") { id name home_planet { name } } }")
+        id (get-in result [:data :human :id])]
+    (testing "Query for human just created"
       (is (nil? (:errors result)) "No errors in response")
-      (is (not (nil? (get-in result [:data :human :id])))
+      (is (not (nil? id))
           "Returns ID")
       (is (= "Dean"
              (get-in result [:data :human :name]))
           "Returns Dean's name")
       (is (= "Alderaan"
              (get-in result [:data :human :home_planet :name]))
-          "Returns Dean's home planet"))))
+          "Returns Dean's home planet"))
+    (testing "Update human"
+      (let [result2 (graphql-request (format "mutation {
+                    updateHuman(input:  {
+                      id: \"%s\", name: \"Dean2\", home_planet: \"TTOO\"
+                    }) { id name home_planet { name } } }" id))]
+        (is (nil? (:errors result2)) "No errors in response")
+        (is (= "Dean2"
+               (get-in result2 [:data :updateHuman :name]))
+            "Returns updated name")
+        (is (= "Tatooine"
+               (get-in result [:data :human :home_planet :name]))
+            "Returns Dean's home planet")))))
 

@@ -4,8 +4,7 @@
    This namespace extracts mutation metadata from entity schemas and derives
    input schemas for create, update, and delete operations."
   (:require [malli.core :as m]
-            [ringline.schema.properties :as props]
-            [spyscope.core]))
+            [ringline.schema.properties :as props]))
 
 ;; T013: Implement get-mutation-property
 (defn get-mutation-property
@@ -43,7 +42,6 @@
        (var? (m/form t))))
 
 (defn correct-field-type [f]
-  (println "[][]" f (last f) (type (last f)))
   (if (is-schema-var (last f))
     (-> (drop-last f)
         (vec)
@@ -76,9 +74,9 @@
       :create
       ;; Create: all fields except :id (required by default)
       (into [:map]
-            #spy/d (->> fields
-                        (filter #(not= :id (first %)))
-                        (map correct-field-type)))
+            (->> fields
+                 (filter #(not= :id (first %)))
+                 (map correct-field-type)))
 
       :update
       ;; Update: :id is required, all other fields are optional

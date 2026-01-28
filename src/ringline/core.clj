@@ -20,8 +20,7 @@
             [malli.experimental.time :as met]
             [datomic.api :as d]
             [clojure.string :as str]
-            [clojure.pprint :as pprint]
-            [spyscope.core]))
+            [clojure.pprint :as pprint]))
 
 (defn create-entity-field-namespace-lookup
   ([parsed]
@@ -177,9 +176,9 @@
         ;; Extract input from args
         (let [input-data-raw (get args :input)
               ;; Convert string ID to UUID if present
-              input-data #spy/d (if-let [id-str (:id input-data-raw)]
-                                  (assoc input-data-raw :id (java.util.UUID/fromString id-str))
-                                  input-data-raw)
+              input-data (if-let [id-str (:id input-data-raw)]
+                           (assoc input-data-raw :id (java.util.UUID/fromString id-str))
+                           input-data-raw)
               entity-id (:id input-data)
 
               ;; Build mutation input map
@@ -209,12 +208,8 @@
                          (d/db datomic-conn))
                     {:keys [entity-id entity-type]} result
                     query-result (d/pull db pattern [(keyword (entity-type namespace-lookup) "id") entity-id])
-                    transformed (transformer/transform-with-selections query-result query-ctx namespace-lookup)
-                    _ (println "???????" result query-result)]
-                ;(println "???????" result dbid query-result)
-                transformed
-                #_(merge (:data result)
-                         {:id (str (:entity-id result))})))
+                    transformed (transformer/transform-with-selections query-result query-ctx namespace-lookup)]
+                transformed))
 
             ;; On error, attach errors to Lacinia context and return nil
             ;; This allows GraphQL to return errors in the response without throwing
@@ -267,9 +262,9 @@
                  ;; Execute query with where clauses if present
                  entities (if (seq where-clauses)
                             ;; Query with filtering
-                            (let [query-result #spy/d (d/q {:find ['?e]
-                                                            :where where-clauses}
-                                                           db)
+                            (let [query-result (d/q {:find ['?e]
+                                                     :where where-clauses}
+                                                    db)
                                   entity-ids (map first query-result)]
                               (mapv #(d/pull db pattern %) entity-ids))
                             ;; No filtering - return empty for now

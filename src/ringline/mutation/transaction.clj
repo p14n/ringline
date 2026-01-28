@@ -7,7 +7,9 @@
             [ringline.schema.properties :as props]
             [ringline.schema.scalars :as scalars]
             [datomic.api :as da]
-            [spyscope.core]))
+            [clojure.string :as str])
+  (:import [java.time OffsetDateTime]
+           [java.util UUID]))
 
 ;; T047: Implement generate-tempid
 (defn generate-tempid
@@ -16,7 +18,7 @@
    Returns:
      String tempid in format 'tempid-<uuid>'"
   []
-  (str "tempid-" (java.util.UUID/randomUUID)))
+  (str "tempid-" (UUID/randomUUID)))
 
 ;; T048: Implement generate-lookup-ref
 (defn generate-lookup-ref
@@ -75,7 +77,7 @@
     (= field-type :time/offset-date-time)
     (cond
       (string? value) (-> value scalars/parse-datetime scalars/store-datetime)
-      (instance? java.time.OffsetDateTime value) (scalars/store-datetime value)
+      (instance? OffsetDateTime value) (scalars/store-datetime value)
       :else value)
 
     ;; T072: Enum scalar: string → keyword
@@ -83,7 +85,7 @@
     ;; Convert hyphens to underscores to match Malli schema conventions
     (and (vector? field-type) (= :enum (first field-type)))
     (if (string? value)
-      (keyword (clojure.string/replace value "-" "_"))
+      (keyword (str/replace value "-" "_"))
       value)
 
     ;; T093: Decimal scalar: string → BigDecimal
@@ -107,7 +109,7 @@
     value))
 
 ;; Helper to get Datomic namespace from schema
-(defn- get-datomic-ns
+(defn- malli-schema->datomic-ns
   "Extract Datomic namespace from schema properties"
   [schema]
   (let [properties (m/properties schema)]
@@ -150,27 +152,29 @@
   (and (= (m/type t) :malli.core/schema)
        (var? (m/form t))))
 
-(defn field-type-from-schema-var
-  [schema-var field]
-  (->> (deref schema-var)
-       (filter vector?)
-       (map (juxt first last))
-       (into {})
-       field))
-
-(defn correct-field-type [f]
-  (println "[][]" f (last f) (type (last f)))
-  (if (is-schema-var (last f))
-    (-> (drop-last f)
-        (vec)
-        (conj (field-type-from-schema-var (m/form (last f)) :id)))
-    f))
-
-(defn malli-entity->field [malli-entity field-kw]
+(defn malli-entity->malli-field [malli-entity field-kw]
   (->> malli-entity
        (filter vector?)
        (filter #(-> % first (= field-kw)))
        (first)))
+
+(defn malli-entity->malli-field-type [malli-entity field-kw]
+  (-> malli-entity
+      (malli-entity->malli-field field-kw)
+      (last)))
+
+(defn convert-malli-value [malli-field-type v]
+  (cond
+    (nil? malli-field-type) v
+    (is-schema-var malli-field-type) [(keyword (->> malli-field-type (deref) (malli-schema->datomic-ns))
+                                               "id") v]
+    :else (convert-value malli-field-type v)))
+
+(defn create-input->tx-converter [datomic-ns malli-entity]
+  (fn [[k v]]
+    (let [malli-field-type (malli-entity->malli-field-type malli-entity k)
+          converted-value (convert-malli-value malli-field-type v)]
+      [(convert-field-name datomic-ns k) converted-value])))
 
 ;; T051: Implement build-create-transaction
 (defn build-create-transaction
@@ -192,24 +196,12 @@
                     :uuid (da/squuid)
                     (str (java.util.UUID/randomUUID)))
         ;; Convert all input fields to namespaced attributes with value conversion
-        namespaced-data (into {}
-                              (map (fn [[k v]]
-                                     (let [field #spy/d (get-field parsed-schema k)
-                                           _ (println "******><><><>" schema k)
-                                           malli-field #spy/d (malli-entity->field schema k)
-                                           field-type #spy/d (last malli-field)
-                                           _ #spy/d (is-schema-var field-type)
-                                           _ #spy/d (when (is-schema-var field-type) (->> field-type (deref) (filter map?) (first) :ringline/datomic-ns))
-                                           converted-value (cond
-                                                             (nil? field-type) v
-                                                             (is-schema-var field-type) #spy/d [(keyword (->> field-type (deref) (filter map?) (first) :ringline/datomic-ns)
-                                                                                                         "id") v]
-                                                             :else (convert-value field-type v))]
-                                       [(convert-field-name datomic-ns k) converted-value]))
-                                   input-data))]
-    #spy/d (assoc namespaced-data
-                  :db/id tempid
-                  (convert-field-name datomic-ns :id) entity-id)))
+        namespaced-data (->> input-data
+                             (map (create-input->tx-converter datomic-ns schema))
+                             (into {}))]
+    (assoc namespaced-data
+           :db/id tempid
+           (convert-field-name datomic-ns :id) entity-id)))
 
 ;; T052: Implement build-update-transaction
 (defn build-update-transaction
@@ -223,20 +215,24 @@
 
    Returns:
      Transaction map with lookup ref and namespaced attributes"
-  [entity-type entity-id input-data parsed-schema]
+  [entity-type entity-id input-data parsed-schema schema]
   (let [datomic-ns (or (get-in parsed-schema [:properties :ringline/datomic-ns]) entity-type)
         lookup-ref (generate-lookup-ref datomic-ns entity-id)
         ;; Filter out :id field (it's already in the lookup ref)
         ;; and convert remaining fields to namespaced attributes with value conversion
-        namespaced-data (into {}
-                              (comp (filter (fn [[k _]] (not= k :id)))
-                                    (map (fn [[k v]]
-                                           (let [field-type (get-field-type parsed-schema k)
-                                                 converted-value (if field-type
-                                                                   (convert-value field-type v)
-                                                                   v)]
-                                             [(convert-field-name datomic-ns k) converted-value]))))
-                              input-data)]
+        namespaced-data (->> input-data
+                             (filter (fn [[k _]] (not= k :id)))
+                             (map (create-input->tx-converter datomic-ns schema))
+                             (into {}))
+        #_(into {}
+                (comp (filter (fn [[k _]] (not= k :id)))
+                      (map (fn [[k v]]
+                             (let [field-type (get-field-type parsed-schema k)
+                                   converted-value (if field-type
+                                                     (convert-value field-type v)
+                                                     v)]
+                               [(convert-field-name datomic-ns k) converted-value]))))
+                input-data)]
     (assoc namespaced-data :db/id lookup-ref)))
 
 ;; T053: Implement build-delete-transaction
@@ -272,17 +268,21 @@
      (case operation
        :create
        (do
+         (println "BLOMMMMMMM")
+
          (when-not data
            (throw (ex-info "Create operation requires :data" {:input mutation-input})))
          (build-create-transaction entity-type data parsed-schema schema))
 
        :update
        (do
+         (println "BLIMMMMMMM")
+
          (when-not entity-id
            (throw (ex-info "Update operation requires :entity-id" {:input mutation-input})))
          (when-not data
            (throw (ex-info "Update operation requires :data" {:input mutation-input})))
-         (build-update-transaction entity-type entity-id data parsed-schema))
+         (build-update-transaction entity-type entity-id data parsed-schema schema))
 
        :delete
        (do

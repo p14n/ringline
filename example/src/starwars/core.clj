@@ -14,8 +14,7 @@
             [starwars.schema :as schema]
             [com.walmartlabs.lacinia.schema :as lacinia-schema]
             [com.walmartlabs.lacinia.util :as util]
-            [datomic.api :as d]
-            [spyscope.core]))
+            [datomic.api :as d]))
 
 ;; Datomic database setup
 (def db-uri "datomic:mem://starwars-example")
@@ -66,7 +65,6 @@
                                              :queries/droid (ringline/create-resolver :droid conn namespace-lookup)})
                      (ringline/attach-mutation-resolvers schema/schemas conn namespace-lookup)
                      (lacinia-schema/compile))]
-      (println "DATOMIC!!!" tx-data)
       @(d/transact conn tx-data)
       @(d/transact conn (concat initial-planets initial-humans initial-droids))
 
