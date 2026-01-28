@@ -81,7 +81,7 @@
                         [:username :string]
                         [:email :string]
                         [:created_at :int]]
-          result (lacinia/generate-input-object :CreateUserInput malli-schema)]
+          result (lacinia/generate-input-object malli-schema)]
       (is (map? result) "Returns a map")
       (is (contains? result :fields) "Has :fields key")
       (is (map? (:fields result)) "Fields is a map")

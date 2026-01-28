@@ -4,6 +4,7 @@
    This namespace extracts mutation metadata from entity schemas and derives
    input schemas for create, update, and delete operations."
   (:require [malli.core :as m]
+            [ringline.schema.parser :as parser]
             [ringline.schema.properties :as props]))
 
 ;; T013: Implement get-mutation-property
@@ -18,36 +19,6 @@
   [schema]
   (let [properties (m/properties schema)]
     (props/get-mutations properties)))
-
-(defn field-type-from-schema-var
-  [schema-var field]
-  (->> (deref schema-var)
-       (filter vector?)
-       (map (juxt first last))
-       (into {})
-       field))
-
-#_(let [schema-type (m/type field-schema)]
-    (if (= schema-type :malli.core/schema)
-      ;; Dereference schema reference using m/form
-      (let [form (m/form field-schema)]
-        (cond
-          (keyword? form) form
-          (var? form) (field-type-from-schema-var form :id)
-          :else schema-type))
-      schema-type))
-
-(defn is-schema-var [t]
-  (and (= (m/type t) :malli.core/schema)
-       (var? (m/form t))))
-
-(defn correct-field-type [f]
-  (if (is-schema-var (last f))
-    (-> (drop-last f)
-        (vec)
-        (conj (field-type-from-schema-var (m/form (last f)) :id)))
-    f))
-
 
 ;; T014: Implement derive-input-schema
 (defn derive-input-schema
@@ -76,13 +47,13 @@
       (into [:map]
             (->> fields
                  (filter #(not= :id (first %)))
-                 (map correct-field-type)))
+                 (map parser/correct-field-type)))
 
       :update
       ;; Update: :id is required, all other fields are optional
       (into [:map]
             (map (fn [field]
-                   (let [[field-name second-elem third-elem] field
+                   (let [[field-name second-elem third-elem] (parser/correct-field-type field)
                          ;; Malli children have format: [name props schema] where props can be nil
                          ;; If second-elem is a map, it's props and third-elem is schema
                          ;; If second-elem is nil, third-elem is schema
@@ -136,60 +107,3 @@
 
       (contains? operations :delete)
       (assoc :delete-schema (derive-input-schema schema :delete)))))
-
-;; Rich comment block with REPL examples
-(comment
-  ;; Example: Parse mutations from a schema
-  (require '[ringline.mutation.parser :as parser])
-  (require '[malli.core :as m])
-
-  ;; Define a schema with mutations
-  (def user-schema
-    [:map
-     {:ringline/datomic-ns :user
-      :ringline/mutations #{:create :update :delete}}
-     [:id :uuid]
-     [:username :string]
-     [:email :string]
-     [:created-at :int]])
-
-  ;; Parse mutation definitions
-  (parser/parse-mutations :user user-schema)
-  ;; => {:entity-type :user
-  ;;     :operations #{:create :update :delete}
-  ;;     :create-schema [:map [:username :string] [:email :string] [:created-at :int]]
-  ;;     :update-schema [:map [:username {:optional true} :string] ...]
-  ;;     :delete-schema [:map [:id :uuid]]}
-
-  ;; Get mutation property
-  (parser/get-mutation-property user-schema)
-  ;; => #{:create :update :delete}
-
-  ;; Derive input schemas
-  (parser/derive-input-schema user-schema :create)
-  ;; => [:map [:username :string] [:email :string] [:created-at :int]]
-
-  (parser/derive-input-schema user-schema :update)
-  ;; => [:map [:username {:optional true} :string] ...]
-
-  (parser/derive-input-schema user-schema :delete)
-  ;; => [:map [:id :uuid]]
-
-  ;; Schema with subset of mutations
-  (def post-schema
-    [:map
-     {:ringline/datomic-ns :post
-      :ringline/mutations #{:create :update}}
-     [:id :uuid]
-     [:title :string]
-     [:content :string]])
-
-  (parser/parse-mutations :post post-schema)
-  ;; => {:entity-type :post
-  ;;     :operations #{:create :update}
-  ;;     :create-schema [:map [:title :string] [:content :string]]
-  ;;     :update-schema [:map [:title {:optional true} :string] ...]
-  ;;     ;; No :delete-schema
-  ;;     }
-  )
-

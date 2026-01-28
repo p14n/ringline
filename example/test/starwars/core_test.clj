@@ -106,14 +106,26 @@
           "Returns Dean's home planet"))
     (testing "Update human"
       (let [result2 (graphql-request (format "mutation {
-                    updateHuman(input:  {
-                      id: \"%s\", name: \"Dean2\", home_planet: \"TTOO\"
-                    }) { id name home_planet { name } } }" id))]
+                        updateHuman(input:  {
+                          id: \"%s\", name: \"Dean2\", home_planet: \"TTOO\"
+                        }) { id name home_planet { name } } }" id))]
         (is (nil? (:errors result2)) "No errors in response")
         (is (= "Dean2"
                (get-in result2 [:data :updateHuman :name]))
             "Returns updated name")
         (is (= "Tatooine"
-               (get-in result [:data :human :home_planet :name]))
-            "Returns Dean's home planet")))))
+               (get-in result2 [:data :updateHuman :home_planet :name]))
+            "Returns updated home planet")))
+    (testing "Delete human"
+      (let [result3 (graphql-request (format "mutation {
+                            deleteHuman(input:  {
+                              id: \"%s\"
+                            })}" id))]
+        (is (nil? (:errors result3)) "No errors in response")
+        (is (= true (get-in result3 [:data :deleteHuman]))
+            "Returns delete result")))
+    (testing "Query for human just deleted"
+      (let [result4 (graphql-request (format "{ human(id: \"%s\") { id name home_planet { name } } }" id))]
+        (is (nil? (:errors result4)) "No errors in response")
+        (is (nil? (get-in result4 [:data :human :id])) "Returns no ID")))))
 

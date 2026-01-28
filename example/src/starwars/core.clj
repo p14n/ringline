@@ -18,6 +18,11 @@
 
 ;; Datomic database setup
 (def db-uri "datomic:mem://starwars-example")
+(defn cleanup-database!
+  "Clean up the database connection"
+  [conn]
+  (d/release conn)
+  (d/delete-database db-uri))
 
 (def initial-planets [{:db/id "Tatooine"
                        :planet/id "TTOO"
@@ -70,28 +75,4 @@
 
       {:schema schema
        :conn conn})))
-
-(defn cleanup-database!
-  "Clean up the database connection"
-  [conn]
-  (d/release conn)
-  (d/delete-database db-uri))
-
-
-(defn -main
-  "Main entry point for the example"
-  [& args]
-  (println "\n=== Ringline Star Wars Example ===\n")
-  (println "This example demonstrates the Ringline framework with the classic Star Wars schema.")
-  (println "")
-  (println "To see the framework in action, run the tests:")
-  (println "  # Run example tests only:")
-  (println "  clojure -M:test --focus :example")
-  (println "")
-  (println "  # Run all framework tests (including example):")
-  (println "  clojure -M:test")
-  (println "")
-  (println "Or explore the code in the REPL using the examples in the comment block below.")
-  (println ""))
-
 

@@ -142,32 +142,31 @@
 (defn- filter-by-selections
   "Filter entity fields to only include selected fields"
   [entity selections nested-queries entity-ns namespace-lookup]
-  (let [selected-fields (set selections)]
-    (into {}
-          (keep (fn [field-name]
-                  (let [namespaced-field (field-name->namespaced entity-ns field-name)
-                        simple-field (namespaced-keyword->simple namespaced-field)]
-                    (when (contains? entity namespaced-field)
-                      (let [value (get entity namespaced-field)]
-                        ;; Handle nested queries
-                        (if-let [nested-query (get nested-queries field-name)]
-                          (let [nested-selections (:selections nested-query)
-                                nested-nested (:nested-queries nested-query)
-                                ;; Infer target entity namespace from field name
-                                target-ns (or (get namespace-lookup [(keyword entity-ns) simple-field])
-                                              (str/replace (name field-name) #"s$" ""))
-                                transformed-value (cond
-                                                    (vector? value)
-                                                    (mapv #(filter-by-selections % nested-selections nested-nested target-ns namespace-lookup) value)
+  (into {}
+        (keep (fn [field-name]
+                (let [namespaced-field (field-name->namespaced entity-ns field-name)
+                      simple-field (namespaced-keyword->simple namespaced-field)]
+                  (when (contains? entity namespaced-field)
+                    (let [value (get entity namespaced-field)]
+                      ;; Handle nested queries
+                      (if-let [nested-query (get nested-queries field-name)]
+                        (let [nested-selections (:selections nested-query)
+                              nested-nested (:nested-queries nested-query)
+                              ;; Infer target entity namespace from field name
+                              target-ns (or (get namespace-lookup [(keyword entity-ns) simple-field])
+                                            (str/replace (name field-name) #"s$" ""))
+                              transformed-value (cond
+                                                  (vector? value)
+                                                  (mapv #(filter-by-selections % nested-selections nested-nested target-ns namespace-lookup) value)
 
-                                                    (map? value)
-                                                    (filter-by-selections value nested-selections nested-nested target-ns namespace-lookup)
+                                                  (map? value)
+                                                  (filter-by-selections value nested-selections nested-nested target-ns namespace-lookup)
 
-                                                    :else (transform-value value))]
-                            [simple-field transformed-value])
-                          ;; Regular field - transform value
-                          [simple-field (transform-value value)])))))
-                selections))))
+                                                  :else (transform-value value))]
+                          [simple-field transformed-value])
+                        ;; Regular field - transform value
+                        [simple-field (transform-value value)])))))
+              selections)))
 
 (defn transform-with-selections
   "Transform entity including only requested GraphQL selections.

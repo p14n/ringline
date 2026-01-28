@@ -5,15 +5,6 @@
             [com.walmartlabs.lacinia.executor :as executor]))
 
 ;; Malli schemas for validation
-
-(def QueryContext
-  "Schema for query context extracted from Lacinia"
-  [:map
-   [:entity-type :keyword]
-   [:selections [:vector :any]]
-   [:arguments :map]
-   [:nested-queries :map]])
-
 (def PullPattern
   "Schema for Datomic pull pattern"
   [:map

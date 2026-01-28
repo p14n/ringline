@@ -84,14 +84,15 @@
 (defn create-test-schema
   "Create the complete Lacinia schema with resolvers attached and compiled"
   [conn]
-  (let [framework (ringline/init-framework schemas {})
+  (let [{:keys [namespace-lookup] :as framework} (ringline/init-framework schemas {})
         lacinia-schema (:lacinia framework)
 
         ;; Attach mutation resolvers
         schema-with-mutations (ringline/attach-mutation-resolvers
                                lacinia-schema
                                schemas
-                               conn)
+                               conn
+                               namespace-lookup)
 
         ;; Attach automatic query resolvers for all entities
         event-resolver (ringline/create-resolver :event conn)
@@ -127,7 +128,7 @@
           schema (create-test-schema conn)]
       (try
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createEvent(input: {
                                         name: \"Annual Conference 2024\"
                                         event_date: \"2024-06-15\"
@@ -139,7 +140,7 @@
                                         registration_deadline
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (some? (get-in result [:data :createEvent :id]))
               "Returns generated UUID")
@@ -163,7 +164,7 @@
       (try
         ;; First create an event
         (execute-query schema
-                      "mutation {
+                       "mutation {
                          createEvent(input: {
                            name: \"Summer Workshop\"
                            event_date: \"2024-07-20\"
@@ -171,11 +172,11 @@
                            id
                          }
                        }"
-                      conn)
+                       conn)
         ;; Then query it back
         (let [result (execute-query schema
-                                   "{ event(name: \"Summer Workshop\") { id name event_date } }"
-                                   conn)]
+                                    "{ event(name: \"Summer Workshop\") { id name event_date } }"
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "Summer Workshop"
                  (get-in result [:data :event :name]))
@@ -196,7 +197,7 @@
       (try
         ;; Create event
         (let [create-result (execute-query schema
-                                          "mutation {
+                                           "mutation {
                                              createEvent(input: {
                                                name: \"Product Launch\"
                                                event_date: \"2024-08-10\"
@@ -204,11 +205,11 @@
                                                id
                                              }
                                            }"
-                                          conn)
+                                           conn)
               event-id (get-in create-result [:data :createEvent :id])]
           ;; Update the event date
           (let [update-result (execute-query schema
-                                            (str "mutation {
+                                             (str "mutation {
                                                     updateEvent(input: {
                                                       id: \"" event-id "\"
                                                       event_date: \"2024-09-15\"
@@ -218,7 +219,7 @@
                                                       event_date
                                                     }
                                                   }")
-                                            conn)]
+                                             conn)]
             (is (nil? (:errors update-result)) "No errors in update")
             (is (= "2024-09-15"
                    (get-in update-result [:data :updateEvent :event_date]))
@@ -234,7 +235,7 @@
       (try
         ;; Test invalid format (slash-separated)
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createEvent(input: {
                                         name: \"Invalid Event\"
                                         event_date: \"2024/06/15\"
@@ -242,12 +243,12 @@
                                         id
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (some? (:errors result)) "Should have errors for invalid format"))
 
         ;; Test invalid date value (Feb 30)
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createEvent(input: {
                                         name: \"Invalid Event\"
                                         event_date: \"2024-02-30\"
@@ -255,7 +256,7 @@
                                         id
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (some? (:errors result)) "Should have errors for invalid date value"))
         (finally
           (cleanup-database! conn))))))
@@ -271,7 +272,7 @@
           schema (create-test-schema conn)]
       (try
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createTask(input: {
                                         title: \"Complete project documentation\"
                                         status: \"in-progress\"
@@ -287,7 +288,7 @@
                                         scheduled_for
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (some? (get-in result [:data :createTask :id]))
               "Returns generated UUID")
@@ -314,7 +315,7 @@
       (try
         ;; First create a task
         (execute-query schema
-                      "mutation {
+                       "mutation {
                          createTask(input: {
                            title: \"Review pull request\"
                            status: \"draft\"
@@ -325,11 +326,11 @@
                            id
                          }
                        }"
-                      conn)
+                       conn)
         ;; Then query it back
         (let [result (execute-query schema
-                                   "{ task(title: \"Review pull request\") { id title created_at updated_at } }"
-                                   conn)]
+                                    "{ task(title: \"Review pull request\") { id title created_at updated_at } }"
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "Review pull request"
                  (get-in result [:data :task :title]))
@@ -354,7 +355,7 @@
       (try
         ;; Create task with specific timezone
         (let [create-result (execute-query schema
-                                          "mutation {
+                                           "mutation {
                                              createTask(input: {
                                                title: \"Timezone test\"
                                                status: \"draft\"
@@ -366,7 +367,7 @@
                                                created_at
                                              }
                                            }"
-                                          conn)]
+                                           conn)]
           (is (nil? (:errors create-result)) "No errors in create")
           ;; Note: Current implementation stores as UTC Instant
           ;; The returned value will be in UTC timezone
@@ -383,7 +384,7 @@
       (try
         ;; Test missing timezone
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createTask(input: {
                                         title: \"Invalid Task\"
                                         status: \"draft\"
@@ -394,12 +395,12 @@
                                         id
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (some? (:errors result)) "Should have errors for missing timezone"))
 
         ;; Test invalid time values
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createTask(input: {
                                         title: \"Invalid Task\"
                                         status: \"draft\"
@@ -410,12 +411,12 @@
                                         id
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (some? (:errors result)) "Should have errors for invalid hour"))
 
         ;; Test invalid timezone offset
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createTask(input: {
                                         title: \"Invalid Task\"
                                         created_at: \"2024-01-24T14:30:00+99:99\"
@@ -424,7 +425,7 @@
                                         id
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (some? (:errors result)) "Should have errors for invalid timezone offset"))
         (finally
           (cleanup-database! conn))))))
@@ -440,10 +441,10 @@
           schema (create-test-schema conn)]
       (try
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createTask(input: {
                                         title: \"Implement enum support\"
-                                        status: \"in-progress\"
+                                        status: \"in_progress\"
                                         priority: \"high\"
                                         created_at: \"2024-01-24T14:30:00+00:00\"
                                         updated_at: \"2024-01-24T14:30:00+00:00\"
@@ -454,14 +455,14 @@
                                         priority
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (some? (get-in result [:data :createTask :id]))
               "Returns generated UUID")
           (is (= "Implement enum support"
                  (get-in result [:data :createTask :title]))
               "Returns correct title")
-          (is (= "in-progress"
+          (is (= "in_progress"
                  (get-in result [:data :createTask :status]))
               "Returns status as string")
           (is (= "high"
@@ -478,7 +479,7 @@
       (try
         ;; First create a task
         (execute-query schema
-                      "mutation {
+                       "mutation {
                          createTask(input: {
                            title: \"Review code\"
                            status: \"draft\"
@@ -489,11 +490,11 @@
                            id
                          }
                        }"
-                      conn)
+                       conn)
         ;; Then query it back
         (let [result (execute-query schema
-                                   "{ task(title: \"Review code\") { id title status priority } }"
-                                   conn)]
+                                    "{ task(title: \"Review code\") { id title status priority } }"
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "Review code"
                  (get-in result [:data :task :title]))
@@ -515,7 +516,7 @@
       (try
         ;; Test completely invalid value
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createTask(input: {
                                         title: \"Invalid Task\"
                                         status: \"unknown\"
@@ -526,7 +527,7 @@
                                         id
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (some? (:errors result)) "Should have errors for invalid enum value")
           ;; Note: Error message validation would require checking the actual error message
           ;; which depends on how Lacinia/Malli validation errors are formatted
@@ -534,7 +535,7 @@
 
         ;; Test case mismatch (should suggest correct case)
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createTask(input: {
                                         title: \"Case Mismatch Task\"
                                         status: \"Draft\"
@@ -545,14 +546,14 @@
                                         id
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (some? (:errors result)) "Should have errors for case mismatch")
           ;; The error message should suggest "draft" instead of "Draft"
           )
 
         ;; Test uppercase case mismatch
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createTask(input: {
                                         title: \"Uppercase Task\"
                                         status: \"draft\"
@@ -563,7 +564,7 @@
                                         id
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (some? (:errors result)) "Should have errors for uppercase priority")
           ;; The error message should suggest "high" instead of "HIGH"
           )
@@ -578,7 +579,7 @@
       (try
         ;; Create task with all enum values
         (let [create-result (execute-query schema
-                                          "mutation {
+                                           "mutation {
                                              createTask(input: {
                                                title: \"Complete enum test\"
                                                status: \"completed\"
@@ -592,7 +593,7 @@
                                                priority
                                              }
                                            }"
-                                          conn)]
+                                           conn)]
           (is (nil? (:errors create-result)) "No errors in create")
           (is (= "completed" (get-in create-result [:data :createTask :status]))
               "Status is serialized as string")
@@ -601,8 +602,8 @@
 
         ;; Query back and verify
         (let [query-result (execute-query schema
-                                         "{ task(title: \"Complete enum test\") { status priority } }"
-                                         conn)]
+                                          "{ task(title: \"Complete enum test\") { status priority } }"
+                                          conn)]
           (is (nil? (:errors query-result)) "No errors in query")
           (is (= "completed" (get-in query-result [:data :task :status]))
               "Status persists correctly")
@@ -624,7 +625,7 @@
           schema (create-test-schema conn)]
       (try
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createProduct(input: {
                                         name: \"Premium Widget\"
                                         price: \"19.99\"
@@ -636,7 +637,7 @@
                                         weight_kg
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (some? (get-in result [:data :createProduct :id]))
               "Returns generated UUID")
@@ -660,7 +661,7 @@
       (try
         ;; First create a product
         (execute-query schema
-                      "mutation {
+                       "mutation {
                          createProduct(input: {
                            name: \"Standard Widget\"
                            price: \"9.99\"
@@ -669,11 +670,11 @@
                            id
                          }
                        }"
-                      conn)
+                       conn)
         ;; Then query it back
         (let [result (execute-query schema
-                                   "{ product(name: \"Standard Widget\") { id name price weight_kg } }"
-                                   conn)]
+                                    "{ product(name: \"Standard Widget\") { id name price weight_kg } }"
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "Standard Widget"
                  (get-in result [:data :product :name]))
@@ -695,7 +696,7 @@
       (try
         ;; Create product with high-precision decimal
         (execute-query schema
-                      "mutation {
+                       "mutation {
                          createProduct(input: {
                            name: \"Precision Test\"
                            price: \"1234567890.1234567890\"
@@ -704,11 +705,11 @@
                            id
                          }
                        }"
-                      conn)
+                       conn)
         ;; Query back and verify precision
         (let [result (execute-query schema
-                                   "{ product(name: \"Precision Test\") { price weight_kg } }"
-                                   conn)]
+                                    "{ product(name: \"Precision Test\") { price weight_kg } }"
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "1234567890.1234567890"
                  (get-in result [:data :product :price]))
@@ -727,7 +728,7 @@
       (try
         ;; Test precision limit (39 digits - should fail)
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createProduct(input: {
                                         name: \"Too Many Digits\"
                                         price: \"123456789012345678901234567890123456789\"
@@ -735,12 +736,12 @@
                                         id
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (some? (:errors result)) "Should have errors for precision violation"))
 
         ;; Test scale limit (11 decimal places - should fail)
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createProduct(input: {
                                         name: \"Too Many Decimals\"
                                         price: \"1.12345678901\"
@@ -748,7 +749,7 @@
                                         id
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (some? (:errors result)) "Should have errors for scale violation"))
         (finally
           (cleanup-database! conn))))))
@@ -761,7 +762,7 @@
       (try
         ;; Create product with various decimal values
         (let [create-result (execute-query schema
-                                          "mutation {
+                                           "mutation {
                                              createProduct(input: {
                                                name: \"Complete Test\"
                                                price: \"99.99\"
@@ -773,7 +774,7 @@
                                                weight_kg
                                              }
                                            }"
-                                          conn)]
+                                           conn)]
           (is (nil? (:errors create-result)) "No errors in create")
           (is (= "99.99" (get-in create-result [:data :createProduct :price]))
               "Price is serialized as string")
@@ -782,8 +783,8 @@
 
         ;; Query back and verify
         (let [query-result (execute-query schema
-                                         "{ product(name: \"Complete Test\") { price weight_kg } }"
-                                         conn)]
+                                          "{ product(name: \"Complete Test\") { price weight_kg } }"
+                                          conn)]
           (is (nil? (:errors query-result)) "No errors in query")
           (is (= "99.99" (get-in query-result [:data :product :price]))
               "Price persists correctly")

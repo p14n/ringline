@@ -70,12 +70,13 @@
   (let [framework (ringline/init-framework schemas {})
         lacinia-schema (:lacinia framework)
         parsed-schemas (:parsed framework)
-
+        namespace-lookup (:namespace-lookup framework)
         ;; Attach mutation resolvers
         schema-with-mutations (ringline/attach-mutation-resolvers
                                lacinia-schema
                                schemas
-                               conn)
+                               conn
+                               namespace-lookup)
 
         ;; Attach automatic query resolver
         user-resolver (ringline/create-resolver :user conn)
@@ -102,8 +103,8 @@
           schema (create-test-schema conn)]
       (try
         (let [result (execute-query schema
-                                   "{ user(email: \"alice@example.com\") { id name email age } }"
-                                   conn)]
+                                    "{ user(email: \"alice@example.com\") { id name email age } }"
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "00000000-0000-0000-0000-000000000001"
                  (get-in result [:data :user :id]))
@@ -126,8 +127,8 @@
           schema (create-test-schema conn)]
       (try
         (let [result (execute-query schema
-                                   "{ user(name: \"Bob Smith\") { id name email age } }"
-                                   conn)]
+                                    "{ user(name: \"Bob Smith\") { id name email age } }"
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "00000000-0000-0000-0000-000000000002"
                  (get-in result [:data :user :id]))
@@ -150,7 +151,7 @@
           schema (create-test-schema conn)]
       (try
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       createUser(input: {
                                         name: \"Diana Prince\"
                                         email: \"diana@example.com\"
@@ -162,7 +163,7 @@
                                         age
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (some? (get-in result [:data :createUser :id]))
               "Returns generated UUID")
@@ -184,7 +185,7 @@
           schema (create-test-schema conn)]
       (try
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       updateUser(input: {
                                         id: \"00000000-0000-0000-0000-000000000002\"
                                         age: 26
@@ -195,7 +196,7 @@
                                         age
                                       }
                                     }"
-                                   conn)]
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "00000000-0000-0000-0000-000000000002"
                  (get-in result [:data :updateUser :id]))
@@ -206,8 +207,8 @@
 
           ;; Verify the update persisted
           (let [verify-result (execute-query schema
-                                            "{ user(email: \"bob@example.com\") { id name email age } }"
-                                            conn)]
+                                             "{ user(email: \"bob@example.com\") { id name email age } }"
+                                             conn)]
             (is (= 26
                    (get-in verify-result [:data :user :age]))
                 "Update persisted in database")))
@@ -220,12 +221,12 @@
           schema (create-test-schema conn)]
       (try
         (let [result (execute-query schema
-                                   "mutation {
+                                    "mutation {
                                       deleteUser(input: {
                                         id: \"00000000-0000-0000-0000-000000000003\"
                                       })
                                     }"
-                                   conn)]
+                                    conn)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= true
                  (get-in result [:data :deleteUser]))

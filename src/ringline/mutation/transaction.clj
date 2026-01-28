@@ -3,9 +3,8 @@
 
    This namespace transforms mutation inputs into Datomic-compatible
    transaction maps with proper tempids, lookup refs, and namespaced attributes."
-  (:require [malli.core :as m]
-            [ringline.schema.properties :as props]
-            [ringline.schema.scalars :as scalars]
+  (:require [ringline.schema.scalars :as scalars]
+            [ringline.schema.parser :as parser]
             [datomic.api :as da]
             [clojure.string :as str])
   (:import [java.time OffsetDateTime]
@@ -108,71 +107,16 @@
     :else
     value))
 
-;; Helper to get Datomic namespace from schema
-(defn- malli-schema->datomic-ns
-  "Extract Datomic namespace from schema properties"
-  [schema]
-  (let [properties (m/properties schema)]
-    (props/get-datomic-ns properties)))
-
-;; Helper function to get field type from parsed schema
-(defn- get-field
-  "Get the field from the parsed schema.
-
-   Args:
-     parsed-schema - The parsed schema map with :fields vector
-     field-name - The field name keyword
-
-   Returns:
-     The field"
-  [parsed-schema field-name]
-  (when-let [field (first (filter #(= field-name (:name %)) (:fields parsed-schema)))]
-    field))
-
-(defn- get-field-type
-  "Get the type of a field from the parsed schema.
-
-   Args:
-     parsed-schema - The parsed schema map with :fields vector
-     field-name - The field name keyword
-
-   Returns:
-     The field type keyword or vector (e.g., :string, :time/local-date, [:enum ...])"
-  [parsed-schema field-name]
-  (:type (get-field parsed-schema field-name)))
-
-(defn id-type [schema]
-  (->> schema
-       :fields
-       (filter #(-> % :name (= :id)))
-       (first)
-       :type))
-
-(defn is-schema-var [t]
-  (and (= (m/type t) :malli.core/schema)
-       (var? (m/form t))))
-
-(defn malli-entity->malli-field [malli-entity field-kw]
-  (->> malli-entity
-       (filter vector?)
-       (filter #(-> % first (= field-kw)))
-       (first)))
-
-(defn malli-entity->malli-field-type [malli-entity field-kw]
-  (-> malli-entity
-      (malli-entity->malli-field field-kw)
-      (last)))
-
 (defn convert-malli-value [malli-field-type v]
   (cond
     (nil? malli-field-type) v
-    (is-schema-var malli-field-type) [(keyword (->> malli-field-type (deref) (malli-schema->datomic-ns))
-                                               "id") v]
+    (parser/is-schema-var malli-field-type) [(keyword (->> malli-field-type (deref) (parser/malli-schema->datomic-ns))
+                                                      "id") v]
     :else (convert-value malli-field-type v)))
 
 (defn create-input->tx-converter [datomic-ns malli-entity]
   (fn [[k v]]
-    (let [malli-field-type (malli-entity->malli-field-type malli-entity k)
+    (let [malli-field-type (parser/malli-entity->malli-field-type malli-entity k)
           converted-value (convert-malli-value malli-field-type v)]
       [(convert-field-name datomic-ns k) converted-value])))
 
@@ -189,7 +133,7 @@
      Transaction map with tempid and namespaced attributes"
   [entity-type input-data parsed-schema schema]
   (let [datomic-ns (or (get-in parsed-schema [:properties :ringline/datomic-ns]) entity-type)
-        id-type (id-type parsed-schema)
+        id-type (parser/id-type parsed-schema)
         tempid (generate-tempid)
         ;; Generate a new UUID for the entity's :id field
         entity-id (case id-type
@@ -223,16 +167,7 @@
         namespaced-data (->> input-data
                              (filter (fn [[k _]] (not= k :id)))
                              (map (create-input->tx-converter datomic-ns schema))
-                             (into {}))
-        #_(into {}
-                (comp (filter (fn [[k _]] (not= k :id)))
-                      (map (fn [[k v]]
-                             (let [field-type (get-field-type parsed-schema k)
-                                   converted-value (if field-type
-                                                     (convert-value field-type v)
-                                                     v)]
-                               [(convert-field-name datomic-ns k) converted-value]))))
-                input-data)]
+                             (into {}))]
     (assoc namespaced-data :db/id lookup-ref)))
 
 ;; T053: Implement build-delete-transaction
@@ -268,7 +203,6 @@
      (case operation
        :create
        (do
-         (println "BLOMMMMMMM")
 
          (when-not data
            (throw (ex-info "Create operation requires :data" {:input mutation-input})))
@@ -276,7 +210,6 @@
 
        :update
        (do
-         (println "BLIMMMMMMM")
 
          (when-not entity-id
            (throw (ex-info "Update operation requires :entity-id" {:input mutation-input})))
@@ -291,68 +224,3 @@
          (build-delete-transaction entity-type entity-id parsed-schema))
 
        (throw (ex-info "Invalid operation type" {:operation operation}))))))
-
-;; Rich comment block with REPL examples
-#_(comment
-    ;; Example: Convert mutation inputs to Datomic transactions
-    (require '[ringline.mutation.transaction :as tx])
-
-    ;; Define a schema
-    (def user-schema
-      [:map
-       {:ringline/datomic-ns :user
-        :ringline/mutations #{:create :update :delete}}
-       [:id :uuid]
-       [:username :string]
-       [:email :string]
-       [:created-at :int]])
-
-    ;; Create mutation
-    (def create-input
-      {:operation :create
-       :entity-type :user
-       :data {:username "alice"
-              :email "alice@example.com"
-              :created-at 1234567890}})
-
-    (tx/mutation-input->transaction create-input user-schema)
-    ;; => {:db/id "tempid-..."
-    ;;     :user/id #uuid "..."
-    ;;     :user/username "alice"
-    ;;     :user/email "alice@example.com"
-    ;;     :user/created-at 1234567890}
-
-    ;; Update mutation
-    (def update-input
-      {:operation :update
-       :entity-type :user
-       :entity-id #uuid "123e4567-e89b-12d3-a456-426614174000"
-       :data {:email "newemail@example.com"}})
-
-    (tx/mutation-input->transaction update-input user-schema)
-    ;; => {:db/id [:user/id #uuid "123e4567-e89b-12d3-a456-426614174000"]
-    ;;     :user/email "newemail@example.com"}
-
-    ;; Delete mutation
-    (def delete-input
-      {:operation :delete
-       :entity-type :user
-       :entity-id #uuid "123e4567-e89b-12d3-a456-426614174000"})
-
-    (tx/mutation-input->transaction delete-input user-schema)
-    ;; => [:db/retractEntity [:user/id #uuid "123e4567-e89b-12d3-a456-426614174000"]]
-
-    ;; Helper functions
-    (tx/generate-tempid)
-    ;; => "tempid-abc123..."
-
-    (tx/generate-lookup-ref :user #uuid "123e4567-e89b-12d3-a456-426614174000")
-    ;; => [:user/id #uuid "123e4567-e89b-12d3-a456-426614174000"]
-
-    (tx/convert-field-name :user :username)
-    ;; => :user/username
-
-    (tx/convert-value :string "alice")
-    ;; => "alice"
-    )
-

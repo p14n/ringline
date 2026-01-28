@@ -4,35 +4,6 @@
             [ringline.schema.types :as types]
             [ringline.schema.properties :as props]))
 
-;; Malli schemas for validation
-
-(def FieldDefinition
-  "Schema for a field definition"
-  [:map
-   [:name :keyword]
-   [:type :keyword]
-   [:required :boolean]
-   [:cardinality [:enum :one :many]]
-   [:enum-values [:maybe [:vector :any]]]
-   [:properties [:maybe :map]]])
-
-(def Relationship
-  "Schema for a relationship definition"
-  [:map
-   [:field :keyword]
-   [:source :keyword]
-   [:target [:maybe :keyword]]
-   [:cardinality [:enum :one :many]]
-   [:bidirectional :boolean]])
-
-(def ParsedSchema
-  "Schema for a parsed Malli schema"
-  [:map
-   [:schema-name :keyword]
-   [:fields [:vector FieldDefinition]]
-   [:properties :map]
-   [:relationships [:vector Relationship]]])
-
 ;; Field extraction
 
 (defn- extract-field-type
@@ -50,7 +21,7 @@
 
 (defn- extract-cardinality
   "Determine cardinality (:one or :many) from field type"
-  [field-type field-schema]
+  [field-type]
   (if (types/collection-type? field-type)
     :many
     :one))
@@ -85,7 +56,7 @@
         actual-type (if (types/collection-type? field-type)
                       (extract-ref-type schema-obj)
                       field-type)
-        cardinality (extract-cardinality field-type schema-obj)
+        cardinality (extract-cardinality field-type)
         field-props (or field-properties (m/properties schema-obj))]
     {:name field-name
      :type actual-type
@@ -143,6 +114,51 @@
                 :properties properties
                 :relationships relationships}]
     result))
+
+
+(defn malli-schema->datomic-ns
+  "Extract Datomic namespace from schema properties"
+  [schema]
+  (let [properties (m/properties schema)]
+    (props/get-datomic-ns properties)))
+
+(defn id-type [schema]
+  (->> schema
+       :fields
+       (filter #(-> % :name (= :id)))
+       (first)
+       :type))
+
+(defn is-schema-var [t]
+  (and (= (m/type t) :malli.core/schema)
+       (var? (m/form t))))
+
+(defn malli-entity->malli-field [malli-entity field-kw]
+  (->> malli-entity
+       (filter vector?)
+       (filter #(-> % first (= field-kw)))
+       (first)))
+
+(defn malli-entity->malli-field-type [malli-entity field-kw]
+  (-> malli-entity
+      (malli-entity->malli-field field-kw)
+      (last)))
+
+(defn field-type-from-schema-var
+  [schema-var field]
+  (->> (deref schema-var)
+       (filter vector?)
+       (map (juxt first last))
+       (into {})
+       field))
+
+(defn correct-field-type [f]
+  (if (is-schema-var (last f))
+    (-> (drop-last f)
+        (vec)
+        (conj (field-type-from-schema-var (m/form (last f)) :id)))
+    f))
+
 
 ;; Rich comment block with REPL examples
 (comment

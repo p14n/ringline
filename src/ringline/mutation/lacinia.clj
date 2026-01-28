@@ -15,14 +15,6 @@
   (let [parts (str/split (name kw) #"-")]
     (str/join "" (map str/capitalize parts))))
 
-(defn- keyword->camel-case
-  "Convert keyword to camelCase string"
-  [kw]
-  (let [parts (str/split (name kw) #"-")
-        first-part (first parts)
-        rest-parts (rest parts)]
-    (str first-part (str/join "" (map str/capitalize rest-parts)))))
-
 ;; T029: Implement mutation-name
 (defn mutation-name
   "Generate GraphQL mutation name from entity type and operation.
@@ -99,7 +91,7 @@
 
    Returns:
      Map with :fields key containing field definitions"
-  [input-type-name malli-schema]
+  [malli-schema]
   (let [children (m/children malli-schema)
         fields (filter vector? children)]
     {:fields
@@ -153,7 +145,6 @@
   [parsed-mutations operation]
   (let [entity-type (:entity-type parsed-mutations)
         entity-pascal (keyword->pascal-case entity-type)
-        input-schema (get parsed-mutations (keyword (str (name operation) "-schema")))
         input-type (input-type-name entity-type operation)
         description (str (str/capitalize (name operation)) " a new " entity-pascal)
         ;; Delete mutations return Boolean, others return the entity type
@@ -188,78 +179,8 @@
                             (keep (fn [operation]
                                     (when-let [schema (get parsed-mutations (keyword (str (name operation) "-schema")))]
                                       (let [input-name (input-type-name entity-type operation)]
-                                        [input-name (generate-input-object input-name schema)])))
+                                        [input-name (generate-input-object schema)])))
                                   operations))]
 
     {:mutations mutations
      :input-objects input-objects}))
-
-;; Rich comment block with REPL examples
-(comment
-  ;; Example: Generate mutation schemas
-  (require '[ringline.mutation.lacinia :as lacinia])
-  (require '[ringline.mutation.parser :as parser])
-
-  ;; Define a schema with mutations
-  (def user-schema
-    [:map
-     {:ringline/datomic-ns :user
-      :ringline/mutations #{:create :update :delete}}
-     [:id :uuid]
-     [:username :string]
-     [:email :string]
-     [:created-at :int]])
-
-  ;; Parse mutations
-  (def parsed (parser/parse-mutations :user user-schema))
-
-  ;; Generate Lacinia mutation schemas
-  (lacinia/generate-mutation-schemas parsed)
-  ;; => {:createUser {:type :User
-  ;;                  :args {:input {:type (non-null :CreateUserInput)}}
-  ;;                  :description "Create a new User"}
-  ;;     :updateUser {:type :User
-  ;;                  :args {:input {:type (non-null :UpdateUserInput)}}
-  ;;                  :description "Update a new User"}
-  ;;     :deleteUser {:type :User
-  ;;                  :args {:input {:type (non-null :DeleteUserInput)}}
-  ;;                  :description "Delete a new User"}}
-
-  ;; Generate mutation name
-  (lacinia/mutation-name :user :create)
-  ;; => :createUser
-
-  (lacinia/mutation-name :blog-post :update)
-  ;; => :updateBlogPost
-
-  ;; Generate input type name
-  (lacinia/input-type-name :user :create)
-  ;; => :CreateUserInput
-
-  (lacinia/input-type-name :blog-post :delete)
-  ;; => :DeleteBlogPostInput
-
-  ;; Generate input object
-  (lacinia/generate-input-object
-   :CreateUserInput
-   [:map
-    [:username :string]
-    [:email :string]
-    [:created-at :int]])
-  ;; => {:fields {:username {:type (non-null String)}
-  ;;              :email {:type (non-null String)}
-  ;;              :created_at {:type (non-null Int)}}}
-
-  ;; Generate mutation field
-  (lacinia/generate-mutation-field parsed :create)
-  ;; => {:type :User
-  ;;     :args {:input {:type (non-null :CreateUserInput)}}
-  ;;     :description "Create a new User"}
-
-  ;; Type mapping
-  (lacinia/malli-type->graphql-type :string)  ;; => String
-  (lacinia/malli-type->graphql-type :int)     ;; => Int
-  (lacinia/malli-type->graphql-type :uuid)    ;; => ID
-  (lacinia/malli-type->graphql-type :boolean) ;; => Boolean
-  )
-

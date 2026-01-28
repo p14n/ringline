@@ -2,8 +2,7 @@
   "Integration tests for custom query and mutation operations end-to-end workflow"
   (:require [clojure.test :refer [deftest is testing]]
             [ringline.schema.parser :as parser]
-            [ringline.schema.lacinia :as lacinia]
-            [ringline.core :as core]))
+            [ringline.schema.lacinia :as lacinia]))
 
 ;; ============================================================================
 ;; T018: Custom Query End-to-End Integration Tests (TDD - Write FIRST)
@@ -34,7 +33,7 @@
       (is (= :User (get-in lacinia-schema [:queries :searchUsers :type])) "Custom query return type correct")
 
       ;; Step 5: Attach custom resolver
-      (let [custom-resolver (fn [ctx args value]
+      (let [custom-resolver (fn [_ctx _args _value]
                               ;; Mock resolver that returns search results
                               [{:id "user-1" :username "alice" :email "alice@example.com"}
                                {:id "user-2" :username "bob" :email "bob@example.com"}])
@@ -185,8 +184,8 @@
           order-schema [:map {:ringline/datomic-ns :order
                               :ringline/query-root true
                               :ringline/searchable-fields [:status]}
-                         [:id :uuid]
-                         [:status :string]]
+                        [:id :uuid]
+                        [:status :string]]
 
           ;; Parse both schemas
           parsed-user (parser/parse-schema :User user-schema)

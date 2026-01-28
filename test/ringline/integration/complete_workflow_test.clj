@@ -75,7 +75,7 @@
   (testing "Complete workflow with nested relationships"
     (let [;; Initialize framework
           schemas fixtures/test-schemas
-          framework (core/init-framework schemas {})
+          _framework (core/init-framework schemas {})
 
           ;; Simulate GraphQL query with nested selection
           lacinia-ctx {:com.walmartlabs.lacinia/selection
@@ -86,7 +86,7 @@
           query-ctx (converter/build-query-context lacinia-ctx :User)
 
           ;; Convert to pull pattern
-          pull-result (converter/graphql->pull query-ctx)
+          _pull-result (converter/graphql->pull query-ctx)
 
           ;; Simulate Datomic result with nested entities
           datomic-entity {:user/id "123"
@@ -169,6 +169,7 @@
     (let [;; Initialize framework
           schemas {:user fixtures/user-with-mutations-schema}
           framework (core/init-framework schemas {})
+          namespace-lookup (:namespace-lookup framework)
 
           ;; Create individual mutation resolver with mock connection
           mock-db-conn {:type :mock-connection
@@ -181,7 +182,8 @@
                            :user
                            :create
                            mock-db-conn
-                           fixtures/user-with-mutations-schema)]
+                           fixtures/user-with-mutations-schema
+                           namespace-lookup)]
 
       ;; Verify resolver is a function
       (is (fn? create-resolver) "Resolver is a function")
@@ -195,9 +197,8 @@
 
         ;; Verify result structure - mutation resolvers return entity data for GraphQL
         (is (map? result) "Result is a map")
-        (is (contains? result :id) "Has id field (generated UUID)")
-        (is (contains? result :username) "Has username field")
-        (is (= "alice" (:username result)) "Username matches input"))))
+        (is (contains? result :entity-id) "Has id field (generated UUID)")
+        (is (= "alice" (-> result :data :username)) "Username matches input"))))
 
   (testing "Attach mutation resolvers to schema"
     (let [;; Initialize framework
@@ -209,7 +210,8 @@
           lacinia-with-resolvers (core/attach-mutation-resolvers
                                   (:lacinia framework)
                                   schemas
-                                  mock-db-conn)
+                                  mock-db-conn
+                                  {})
 
           ;; Verify resolvers attached
           create-mutation (get-in lacinia-with-resolvers [:mutations :createUser])
