@@ -14,7 +14,8 @@
             [starwars.schema :as schema]
             [com.walmartlabs.lacinia.schema :as lacinia-schema]
             [com.walmartlabs.lacinia.util :as util]
-            [datomic.api :as d]))
+            [datomic.api :as d]
+            [clojure.pprint :as pprint]))
 
 ;; Datomic database setup
 (def db-uri "datomic:mem://starwars-example")
@@ -56,7 +57,7 @@
                       :droid/name "C-3PO"
                       :droid/primary_function "Protocol"}])
 
-(defn create-graphql-system!
+(defn create-custom-graphql-system!
   "Create and initialize Datomic in-memory database with schema"
   []
   (d/create-database db-uri)
@@ -74,5 +75,17 @@
       @(d/transact conn (concat initial-planets initial-humans initial-droids))
 
       {:schema schema
+       :conn conn})))
+
+(defn create-graphql-system!
+  "Create and initialize Datomic in-memory database with schema"
+  []
+  (d/create-database db-uri)
+  (let [conn (d/connect db-uri)]
+    (println "Database created successfully")
+    (let [{:keys [lacinia]} (ringline/auto-framework! conn schema/schemas)]
+      @(d/transact conn (concat initial-planets initial-humans initial-droids))
+
+      {:schema lacinia
        :conn conn})))
 

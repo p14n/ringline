@@ -4,22 +4,25 @@
    This namespace provides the main entry points for using the framework:
    - init-framework: Initialize with Malli schemas, get Datomic + Lacinia schemas
    - create-resolver: Create Lacinia resolver functions that use Datomic pull"
-  (:require [ringline.schema.parser :as parser]
-            [ringline.schema.datomic :as datomic]
-            [ringline.schema.lacinia :as lacinia]
-            [ringline.schema.scalars :as scalars]
-            [ringline.schema.types :as types]
+  (:require [clojure.string :as str]
+            [com.walmartlabs.lacinia.resolve :as resolve]
+            [com.walmartlabs.lacinia.schema :as lacinia-schema]
+            [com.walmartlabs.lacinia.util :as util]
+            [datomic.api :as d]
+            [malli.core :as m]
+            [malli.experimental.time :as met]
+            [malli.registry :as mr]
+            [ringline.mutation.executor :as mutation-executor]
+            [ringline.mutation.lacinia :as mutation-lacinia]
+            [ringline.mutation.parser :as mutation-parser]
             [ringline.query.converter :as converter]
             [ringline.response.transformer :as transformer]
-            [ringline.mutation.parser :as mutation-parser]
-            [ringline.mutation.lacinia :as mutation-lacinia]
-            [ringline.mutation.executor :as mutation-executor]
-            [malli.core :as m]
-            [malli.registry :as mr]
-            [malli.experimental.time :as met]
-            [datomic.api :as d]
-            [clojure.string :as str]
-            [com.walmartlabs.lacinia.resolve :as resolve])
+            [ringline.schema.datomic :as datomic]
+            [ringline.schema.lacinia :as lacinia]
+            [ringline.schema.parser :as parser]
+            [ringline.schema.scalars :as scalars]
+            [ringline.schema.types :as types]
+            [clojure.pprint :as pprint])
   (:import [datomic.db Db]
            [datomic Connection]
            [java.util UUID]))
@@ -134,7 +137,6 @@
                           (lacinia/attach-resolvers lacinia-with-mutations resolvers)
                           lacinia-with-mutations)
           namespace-lookup (create-entity-field-namespace-lookup parsed-schemas)]
-
       {:datomic datomic-schemas
        :lacinia lacinia-final
        :parsed parsed-schemas
@@ -343,3 +345,28 @@
       (assoc lacinia-schema :mutations mutations-with-resolvers))
     ;; No mutations in schema
     lacinia-schema))
+
+(defn create-query-resolver-map
+  "Create a map of automatic query resolvers for a Lacinia schema."
+  [parsed conn namespace-lookup]
+  (let [root-queries (->> parsed
+                          (filter #(get-in % [:properties :ringline/query-root]))
+                          (map :schema-name))]
+    (->> root-queries
+         (map (fn [query] [(keyword (str "queries/" (name query)))
+                           (create-resolver query conn namespace-lookup)]))
+         (into {}))))
+
+(defn auto-framework!
+  "Calls init-framework and then transacts the Datomic schema and compiles the Lacinia schema with automatic resolvers."
+  [conn schemas]
+  (let [{:keys [datomic lacinia namespace-lookup parsed] :as framework} (init-framework schemas {})
+        tx-data (mapcat datomic/schema->transaction datomic)
+        query-resolvers (create-query-resolver-map parsed conn namespace-lookup)
+        schema (-> lacinia
+                   ;; Attach resolvers
+                   (util/inject-resolvers query-resolvers)
+                   (attach-mutation-resolvers schemas conn namespace-lookup)
+                   (lacinia-schema/compile))]
+    @(d/transact conn tx-data)
+    (assoc framework :lacinia schema)))

@@ -67,7 +67,7 @@
 
 ;; Property extraction
 
-(defn- extract-properties
+(defn extract-properties
   "Extract custom properties from Malli schema"
   [schema]
   (or (m/properties schema) {}))
@@ -93,8 +93,18 @@
        (filter some?)
        vec))
 
-;; Main parsing functions
+(defn default-namespace
+  "Generate default namespace from schema name"
+  [schema-name]
+  (name schema-name))
 
+(defn add-default-namespace [schema-name schema]
+  (let [props (extract-properties schema)]
+    (if (props/get-datomic-ns props)
+      schema
+      (assoc props :ringline/datomic-ns (default-namespace schema-name)))))
+
+;; Main parsing functions
 (defn parse-schema
   "Parse a Malli schema and extract entity metadata.
 

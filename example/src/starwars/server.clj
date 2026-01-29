@@ -7,14 +7,15 @@
    - Running a Jetty server
    - Handling GraphQL queries and mutations over HTTP
    - Proper JSON request/response handling"
-  (:require [ring.adapter.jetty :as jetty]
-            [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
-            [ring.middleware.params :refer [wrap-params]]
-            [ring.util.response :as response]
-            [reitit.ring :as reitit-ring]
-            [com.walmartlabs.lacinia :as lacinia]
-            [starwars.core :as core]
-            [starwars.graphiql :as graphiql])
+  (:require
+   [reitit.ring :as reitit-ring]
+   [ring.adapter.jetty :as jetty]
+   [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
+   [ring.middleware.params :refer [wrap-params]]
+   [ring.util.response :as response]
+   [ringline.ring :as ringline-ring]
+   [starwars.core :as core]
+   [starwars.graphiql :as graphiql])
   (:gen-class))
 
 ;; Global state for database connection and schema
@@ -30,31 +31,6 @@
     (swap! server-state assoc :conn nil :schema nil)
     (println "Database connection closed")))
 
-;; GraphQL HTTP Handler
-
-(defn create-graphql-handler [schema conn]
-  "Handle GraphQL queries and mutations over HTTP.
-
-   Expects POST requests with JSON body containing:
-   - query: GraphQL query string (required)
-   - variables: GraphQL variables map (optional)
-   - operationName: Operation name for multi-operation documents (optional)"
-  (fn graphql-handler [request]
-    (let [body (:body request)
-          query (:query body)
-          variables (:variables body)
-          operation-name (:operationName body)]
-
-      (if-not query
-        (response/response {:errors [{:message "No query provided"}]})
-
-        (let [result (lacinia/execute schema
-                                      query
-                                      variables
-                                      {:conn conn
-                                       :operation-name operation-name})]
-          (response/response result))))))
-
 ;; Health check handler
 
 (defn health-handler
@@ -69,7 +45,7 @@
   "Ring handler with middleware"
   [schema conn]
   (-> (reitit-ring/ring-handler
-       (reitit-ring/router [["/graphql" {:post (create-graphql-handler schema conn)}]
+       (reitit-ring/router [["/graphql" {:post (ringline-ring/create-graphql-handler schema conn)}]
                             ["/graphiql" {:get graphiql/graphiql-handler}]
                             ["/health" {:get health-handler}]])
        (reitit-ring/create-default-handler
