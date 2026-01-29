@@ -63,13 +63,13 @@
   (d/create-database db-uri)
   (let [conn (d/connect db-uri)]
     (println "Database created successfully")
-    (let [{:keys [datomic lacinia namespace-lookup]} (ringline/init-framework schema/schemas {})
+    (let [{:keys [datomic lacinia namespace-lookup schemas-map]} (ringline/init-framework schema/schemas {})
           tx-data (mapcat ringline-datomic/schema->transaction datomic)
           schema (-> lacinia
                      ;; Attach resolvers
                      (util/inject-resolvers {:queries/human (ringline/create-resolver :human conn namespace-lookup)
                                              :queries/droid (ringline/create-resolver :droid conn namespace-lookup)})
-                     (ringline/attach-mutation-resolvers schema/schemas conn namespace-lookup)
+                     (ringline/attach-mutation-resolvers schemas-map conn namespace-lookup)
                      (lacinia-schema/compile))]
       @(d/transact conn tx-data)
       @(d/transact conn (concat initial-planets initial-humans initial-droids))

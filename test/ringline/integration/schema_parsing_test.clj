@@ -1,10 +1,12 @@
 (ns ringline.integration.schema-parsing-test
   "Integration tests for multi-entity schema parsing with relationships"
-  (:require [clojure.test :refer [deftest is testing]]
-            [ringline.schema.parser :as parser]
-            [ringline.schema.datomic :as datomic]
-            [ringline.schema.lacinia :as lacinia]
-            [ringline.fixtures :as fixtures]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [ringline.core :as ringline]
+   [ringline.fixtures :as fixtures]
+   [ringline.schema.datomic :as datomic]
+   [ringline.schema.lacinia :as lacinia]
+   [ringline.schema.parser :as parser]))
 
 (deftest multi-entity-parsing-integration-test
   (testing "Complete workflow: parse multiple related entities"
@@ -69,7 +71,7 @@
 
 (deftest nested-relationship-resolution-test
   (testing "Three-level relationship chain: User -> Post -> Comment"
-    (let [result (parser/parse-schemas fixtures/test-schemas)
+    (let [result (parser/parse-schemas (ringline/schemas->schemas-map fixtures/test-schemas))
           user (first (filter #(= :user (:schema-name %)) result))
           post (first (filter #(= :post (:schema-name %)) result))
           comment (first (filter #(= :comment (:schema-name %)) result))]
@@ -134,7 +136,7 @@
           (is (every? :db/cardinality tx-data))))))
 
   (testing "Relationship attributes have correct ref types"
-    (let [parsed (parser/parse-schemas fixtures/test-schemas)
+    (let [parsed (parser/parse-schemas (ringline/schemas->schemas-map fixtures/test-schemas))
           datomic-schemas (datomic/generate-schemas parsed)
           user-schema (first (filter #(= :user (:source-entity %)) datomic-schemas))
           post-schema (first (filter #(= :post (:source-entity %)) datomic-schemas))
@@ -185,7 +187,7 @@
           (is (contains? user-query :args) "User query has args")))))
 
   (testing "Complete workflow with all three schemas"
-    (let [parsed (parser/parse-schemas fixtures/test-schemas)
+    (let [parsed (parser/parse-schemas (ringline/schemas->schemas-map fixtures/test-schemas))
           lacinia-schema (lacinia/generate-schemas parsed)
           objects (:objects lacinia-schema)]
       (is (= 3 (count objects)) "Has all three object types")

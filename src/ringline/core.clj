@@ -63,8 +63,18 @@
     (scalars/custom-schemas)
     (mr/var-registry))))
 
-;; Framework initialization
+(defn schemas->schemas-map [schemas]
+  (->> schemas
+       (map (fn [schema]
+              (let [sn (-> schema
+                           (m/properties)
+                           :ringline/schema-name)]
+                (when-not sn
+                  (throw (ex-info "Schema must have :ringline/schema-name property" {:schema schema})))
+                [sn schema])))
+       (into {})))
 
+;; Framework initialization
 (defn init-framework
   "Initialize framework with Malli schemas.
 
@@ -90,11 +100,12 @@
      (init-framework {:User user-schema :Post post-schema}
                      {:custom-operations {:queries {:searchUsers {...}}}
                       :resolvers {:searchUsers search-users-fn}})"
-  [schemas-map options-map]
+  [schemas options-map]
   ;; Set up Malli registry with custom schemas
   (setup-malli-registry!)
   (try
-    (let [;; Extract custom operations from options
+    (let [schemas-map (schemas->schemas-map schemas)
+          ;; Extract custom operations from options
           custom-operations (:custom-operations options-map)
           resolvers (:resolvers options-map)
 
@@ -141,10 +152,11 @@
        :lacinia lacinia-final
        :parsed parsed-schemas
        :mutations mutation-defs
-       :namespace-lookup namespace-lookup})
+       :namespace-lookup namespace-lookup
+       :schemas-map schemas-map})
     (catch Exception e
       (throw (ex-info "Failed to initialize framework"
-                      {:schemas-map schemas-map
+                      {:schemas schemas
                        :options-map options-map
                        :error (.getMessage e)}
                       e)))))
@@ -305,9 +317,10 @@
 
    Example:
      (attach-mutation-resolvers lacinia-schema {:user user-schema} db-conn)"
-  [lacinia-schema schemas-map datomic-conn namespace-lookup]
+  [lacinia-schema schemas datomic-conn namespace-lookup]
   (if-let [mutations (:mutations lacinia-schema)]
     (let [;; For each mutation, attach a resolver
+          schemas-map (if (map? schemas) schemas (schemas->schemas-map schemas))
           mutations-with-resolvers
           (reduce-kv
            (fn [acc mutation-name mutation-def]
@@ -360,13 +373,13 @@
 (defn auto-framework!
   "Calls init-framework and then transacts the Datomic schema and compiles the Lacinia schema with automatic resolvers."
   [conn schemas]
-  (let [{:keys [datomic lacinia namespace-lookup parsed] :as framework} (init-framework schemas {})
+  (let [{:keys [datomic lacinia namespace-lookup parsed schemas-map] :as framework} (init-framework schemas {})
         tx-data (mapcat datomic/schema->transaction datomic)
         query-resolvers (create-query-resolver-map parsed conn namespace-lookup)
         schema (-> lacinia
                    ;; Attach resolvers
                    (util/inject-resolvers query-resolvers)
-                   (attach-mutation-resolvers schemas conn namespace-lookup)
+                   (attach-mutation-resolvers schemas-map conn namespace-lookup)
                    (lacinia-schema/compile))]
     @(d/transact conn tx-data)
     (assoc framework :lacinia schema)))

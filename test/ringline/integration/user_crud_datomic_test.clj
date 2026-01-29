@@ -18,7 +18,8 @@
 ;; User schema with CRUD mutations
 (def user-schema
   [:map
-   {:ringline/datomic-ns "user"
+   {:ringline/schema-name :user
+    :ringline/datomic-ns "user"
     :ringline/query-root true
     :ringline/searchable [:email :name]
     :ringline/mutations #{:create :update :delete}}
@@ -27,7 +28,7 @@
    [:email :string]
    [:age :int]])
 
-(def schemas {:user user-schema})
+(def schemas [user-schema])
 
 (def db-uri "datomic:mem://user-crud-test")
 
@@ -74,7 +75,7 @@
         ;; Attach mutation resolvers
         schema-with-mutations (ringline/attach-mutation-resolvers
                                lacinia-schema
-                               schemas
+                               (ringline/schemas->schemas-map schemas)
                                conn
                                namespace-lookup)
 

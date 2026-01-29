@@ -9,8 +9,8 @@
 (deftest complete-workflow-test
   (testing "Complete workflow: Malli → Datomic + Lacinia → Query → Response"
     (let [;; Step 1: Initialize framework with Malli schemas
-          schemas {:user fixtures/user-schema
-                   :post fixtures/post-schema}
+          schemas [fixtures/user-schema
+                   fixtures/post-schema]
           framework (core/init-framework schemas {})
 
           ;; Verify framework initialization
@@ -128,7 +128,7 @@
 (deftest mutation-workflow-test
   (testing "Complete mutation workflow: Schema → Lacinia mutations → Execution"
     (let [;; Step 1: Initialize framework with mutation-enabled schema
-          schemas {:user fixtures/user-with-mutations-schema}
+          schemas [fixtures/user-with-mutations-schema]
           framework (core/init-framework schemas {})
 
           ;; Verify framework initialization with mutations
@@ -167,7 +167,7 @@
 
   (testing "Mutation resolver creation and attachment"
     (let [;; Initialize framework
-          schemas {:user fixtures/user-with-mutations-schema}
+          schemas [fixtures/user-with-mutations-schema]
           framework (core/init-framework schemas {})
           namespace-lookup (:namespace-lookup framework)
 
@@ -202,7 +202,7 @@
 
   (testing "Attach mutation resolvers to schema"
     (let [;; Initialize framework
-          schemas {:user fixtures/user-with-mutations-schema}
+          schemas [fixtures/user-with-mutations-schema]
           framework (core/init-framework schemas {})
 
           ;; Attach resolvers

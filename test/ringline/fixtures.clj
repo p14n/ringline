@@ -5,7 +5,8 @@
 ;; Example User entity schema
 (def user-schema
   [:map
-   {:ringline/datomic-ns :user
+   {:ringline/schema-name :user
+    :ringline/datomic-ns :user
     :ringline/query-root true
     :ringline/searchable [:email :username]}
    [:id :uuid]
@@ -17,7 +18,8 @@
 ;; Example Post entity schema
 (def post-schema
   [:map
-   {:ringline/datomic-ns :post
+   {:ringline/schema-name :post
+    :ringline/datomic-ns :post
     :ringline/query-root true
     :ringline/searchable [:title]}
    [:id :uuid]
@@ -31,7 +33,8 @@
 ;; Example Comment entity schema (for nested relationship testing)
 (def comment-schema
   [:map
-   {:ringline/datomic-ns :comment}
+   {:ringline/schema-name :comment
+    :ringline/datomic-ns :comment}
    [:id :uuid]
    [:text :string]
    [:created-at :int]  ; Using :int for timestamp (epoch milliseconds)
@@ -40,9 +43,9 @@
 
 ;; Multi-entity schema map
 (def test-schemas
-  {:user user-schema
-   :post post-schema
-   :comment comment-schema})
+  [user-schema
+   post-schema
+   comment-schema])
 
 ;; Simple schema without custom properties (for basic testing)
 (def simple-schema
@@ -77,7 +80,8 @@
 ;; Schema with all mutation operations
 (def user-with-mutations-schema
   [:map
-   {:ringline/datomic-ns :user
+   {:ringline/schema-name :user
+    :ringline/datomic-ns :user
     :ringline/query-root true
     :ringline/searchable [:email :username]
     :ringline/mutations #{:create :update :delete}}
@@ -89,7 +93,8 @@
 ;; Schema with subset of mutations (create and update only)
 (def post-with-partial-mutations-schema
   [:map
-   {:ringline/datomic-ns :post
+   {:ringline/schema-name :post
+    :ringline/datomic-ns :post
     :ringline/query-root true
     :ringline/mutations #{:create :update}}
    [:id :uuid]
@@ -110,7 +115,8 @@
 ;; Schema with only delete mutation
 (def deletable-only-schema
   [:map
-   {:ringline/datomic-ns :temp-data
+   {:ringline/schema-name :user
+    :ringline/datomic-ns :temp-data
     :ringline/mutations #{:delete}}
    [:id :uuid]
    [:data :string]])

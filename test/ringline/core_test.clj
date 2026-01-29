@@ -6,8 +6,8 @@
 
 (deftest init-framework-test
   (testing "init-framework processes multiple schemas"
-    (let [schemas {:user fixtures/user-schema
-                   :post fixtures/post-schema}
+    (let [schemas [fixtures/user-schema
+                   fixtures/post-schema]
           result (core/init-framework schemas {})]
       (is (map? result) "Returns a map")
       (is (contains? result :datomic) "Has :datomic key")
@@ -15,8 +15,8 @@
       (is (contains? result :parsed) "Has :parsed key")))
 
   (testing "init-framework generates Datomic schemas"
-    (let [schemas {:user fixtures/user-schema
-                   :post fixtures/post-schema}
+    (let [schemas [fixtures/user-schema
+                   fixtures/post-schema]
           result (core/init-framework schemas {})
           datomic (:datomic result)]
       (is (vector? datomic) "Datomic is a vector")
@@ -24,8 +24,8 @@
       (is (every? map? datomic) "All Datomic schemas are maps")))
 
   (testing "init-framework generates Lacinia schema"
-    (let [schemas {:user fixtures/user-schema
-                   :post fixtures/post-schema}
+    (let [schemas [fixtures/user-schema
+                   fixtures/post-schema]
           result (core/init-framework schemas {})
           lacinia (:lacinia result)]
       (is (map? lacinia) "Lacinia is a map")
@@ -33,15 +33,15 @@
       (is (contains? lacinia :queries) "Has :queries")))
 
   (testing "init-framework returns parsed schemas"
-    (let [schemas {:user fixtures/user-schema
-                   :post fixtures/post-schema}
+    (let [schemas [fixtures/user-schema
+                   fixtures/post-schema]
           result (core/init-framework schemas {})
           parsed (:parsed result)]
       (is (vector? parsed) "Parsed is a vector")
       (is (= 2 (count parsed)) "Has all parsed schemas")))
 
   (testing "init-framework handles single schema"
-    (let [schemas {:user fixtures/user-schema}
+    (let [schemas [fixtures/user-schema]
           result (core/init-framework schemas {})]
       (is (= 1 (count (:parsed result))) "Has one parsed schema")
       (is (seq (:datomic result)) "Has Datomic schema")
@@ -63,14 +63,14 @@
 
 (deftest create-resolver-test
   (testing "create-resolver returns a function"
-    (let [schemas {:user fixtures/user-schema}
+    (let [schemas [fixtures/user-schema]
           framework (core/init-framework schemas {})
           mock-conn {:db-after nil}  ; Mock Datomic connection
           resolver (core/create-resolver :User mock-conn)]
       (is (fn? resolver) "Returns a function")))
 
   (testing "create-resolver function accepts Lacinia context and args"
-    (let [schemas {:user fixtures/user-schema}
+    (let [schemas [fixtures/user-schema]
           framework (core/init-framework schemas {})
           mock-conn {:db-after nil}
           resolver (core/create-resolver :User mock-conn)]
@@ -78,8 +78,7 @@
       (is (fn? resolver) "Resolver is a function")))
 
   (testing "create-resolver handles different entity types"
-    (let [schemas {:user fixtures/user-schema
-                   :post fixtures/post-schema}
+    (let [schemas [fixtures/user-schema fixtures/post-schema]
           framework (core/init-framework schemas {})
           mock-conn {:db-after nil}
           user-resolver (core/create-resolver :User mock-conn)
@@ -89,7 +88,7 @@
       (is (not= user-resolver post-resolver) "Different resolvers for different entities")))
 
   (testing "create-resolver handles nil connection gracefully"
-    (let [schemas {:user fixtures/user-schema}
+    (let [schemas [fixtures/user-schema]
           framework (core/init-framework schemas {})
           resolver (core/create-resolver :User nil)]
       (is (fn? resolver) "Returns a function even with nil connection"))))

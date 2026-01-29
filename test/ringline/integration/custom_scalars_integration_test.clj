@@ -20,7 +20,8 @@
 ;; Event schema with Date fields (User Story 1)
 (def event-schema
   [:map
-   {:ringline/datomic-ns "event"
+   {:ringline/schema-name :event
+    :ringline/datomic-ns "event"
     :ringline/query-root true
     :ringline/searchable [:name]
     :ringline/mutations #{:create :update :delete}}
@@ -32,7 +33,8 @@
 ;; Task schema with DateTime and Enum fields (User Stories 2 & 3)
 (def task-schema
   [:map
-   {:ringline/datomic-ns "task"
+   {:ringline/schema-name :task
+    :ringline/datomic-ns "task"
     :ringline/query-root true
     :ringline/searchable [:title]
     :ringline/mutations #{:create :update :delete}}
@@ -48,7 +50,8 @@
 ;; NOTE: Using snake_case for field names to match GraphQL/Lacinia conventions
 (def product-schema
   [:map
-   {:ringline/datomic-ns "product"
+   {:ringline/schema-name :product
+    :ringline/datomic-ns "product"
     :ringline/query-root true
     :ringline/searchable [:name]
     :ringline/mutations #{:create :update :delete}}
@@ -58,9 +61,9 @@
    [:weight_kg {:optional true} [:decimal {:precision 38 :scale 10}]]])
 
 ;; All schemas now included - all scalars are fully implemented
-(def schemas {:event event-schema
-              :task task-schema
-              :product product-schema})
+(def schemas [event-schema
+              task-schema
+              product-schema])
 
 (def db-uri "datomic:mem://custom-scalars-test")
 

@@ -10,25 +10,28 @@
    - Query resolvers with arguments")
 
 (def planet
-  [:map {:ringline/datomic-ns "planet"}
+  [:map {:ringline/schema-name :planet
+         :ringline/datomic-ns "planet"}
    [:id :string]
    [:name :string]])
 
 ;; Human schema - represents a human character in Star Wars
 (def human-schema
   [:map
-   {:ringline/datomic-ns "human"
+   {:ringline/schema-name :human
+    :ringline/datomic-ns "human"
     :ringline/query-root true
     :ringline/mutations #{:create :update :delete}
     :ringline/searchable [:id :name]}
    [:id :uuid]
    [:name :string]
-   [:home_planet {:optional true :ringline/ref-to :planet} #'planet]])
+   [:home_planet {:optional true} #'planet]])
 
 ;; Droid schema - represents a droid character in Star Wars
 (def droid-schema
   [:map
-   {:ringline/datomic-ns "droid"
+   {:ringline/schema-name :droid
+    :ringline/datomic-ns "droid"
     :ringline/query-root true
     :ringline/searchable [:id]}
    [:id :string]
@@ -37,6 +40,6 @@
 
 ;; All schemas map
 (def schemas
-  {:human human-schema
-   :droid droid-schema
-   :planet planet})
+  [human-schema
+   droid-schema
+   planet])

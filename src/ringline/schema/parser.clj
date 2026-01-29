@@ -45,6 +45,12 @@
       ;; For direct types
       field-type)))
 
+(defn resolve-if-schema-var [s]
+  (when (and (= (m/type s) :malli.core/schema)
+             (var? (m/form s)))
+    (deref (m/form s))))
+
+
 (defn- parse-field
   "Parse a single field from Malli schema children"
   [[field-name field-properties field-schema]]
@@ -57,13 +63,16 @@
                       (extract-ref-type schema-obj)
                       field-type)
         cardinality (extract-cardinality field-type)
-        field-props (or field-properties (m/properties schema-obj))]
+        field-props (or field-properties (m/properties schema-obj))
+        ref-to (some->  schema-obj (resolve-if-schema-var) (m/properties) :ringline/schema-name)]
     {:name field-name
      :type actual-type
      :required (not (:optional field-props))  ; Check if field is optional
      :cardinality cardinality
      :enum-values (extract-enum-values schema-obj)
-     :properties field-props}))
+     :properties (if ref-to
+                   (assoc field-props :ringline/ref-to ref-to)
+                   field-props)}))
 
 ;; Property extraction
 
