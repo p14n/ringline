@@ -1,4 +1,4 @@
-(ns starwars.core
+(ns starwars.custom
   "Star Wars example using Ringline framework.
 
    This example demonstrates:
@@ -11,7 +11,6 @@
    - Datomic in-memory database"
   (:require [ringline.core :as ringline]
             [ringline.schema.datomic :as ringline-datomic]
-            [starwars.schema :as schema]
             [com.walmartlabs.lacinia.schema :as lacinia-schema]
             [com.walmartlabs.lacinia.util :as util]
             [datomic.api :as d]
@@ -35,27 +34,12 @@
 (def initial-humans [{:db/id (d/tempid :db.part/user)
                       :human/id (d/squuid)
                       :human/name "Luke Skywalker"
-                      :human/home_planet "Tatooine"}
-                     {:db/id (d/tempid :db.part/user)
-                      :human/id (d/squuid)
-                      :human/name "Darth Vader"
-                      :human/home_planet "Tatooine"}
-                     {:db/id (d/tempid :db.part/user)
-                      :human/id (d/squuid)
-                      :human/name "Han Solo"}
-                     {:db/id (d/tempid :db.part/user)
-                      :human/id (d/squuid)
-                      :human/name "Leia Organa"
-                      :human/home_planet "Alderaan"}])
+                      :human/home_planet "Tatooine"}])
 
 (def initial-droids [{:db/id (d/tempid :db.part/user)
                       :droid/id "2000"
                       :droid/name "R2-D2"
-                      :droid/primary_function "Astromech"}
-                     {:db/id (d/tempid :db.part/user)
-                      :droid/id "2001"
-                      :droid/name "C-3PO"
-                      :droid/primary_function "Protocol"}])
+                      :droid/primary_function "Astromech"}])
 
 (defn create-custom-graphql-system!
   "Create and initialize Datomic in-memory database with schema"
@@ -63,7 +47,7 @@
   (d/create-database db-uri)
   (let [conn (d/connect db-uri)]
     (println "Database created successfully")
-    (let [{:keys [datomic lacinia namespace-lookup schemas-map]} (ringline/init-framework schema/schemas {})
+    (let [{:keys [datomic lacinia namespace-lookup schemas-map]} (ringline/init-framework [] {})
           tx-data (mapcat ringline-datomic/schema->transaction datomic)
           schema (-> lacinia
                      ;; Attach resolvers
@@ -76,16 +60,3 @@
 
       {:schema schema
        :conn conn})))
-
-(defn create-graphql-system!
-  "Create and initialize Datomic in-memory database with schema"
-  []
-  (d/create-database db-uri)
-  (let [conn (d/connect db-uri)]
-    (println "Database created successfully")
-    (let [{:keys [lacinia]} (ringline/auto-framework! conn schema/schemas)]
-      @(d/transact conn (concat initial-planets initial-humans initial-droids))
-
-      {:schema lacinia
-       :conn conn})))
-

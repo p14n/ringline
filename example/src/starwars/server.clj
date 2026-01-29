@@ -8,37 +8,22 @@
    - Handling GraphQL queries and mutations over HTTP
    - Proper JSON request/response handling"
   (:require
+   [datomic.api :as d]
    [reitit.ring :as reitit-ring]
    [ring.adapter.jetty :as jetty]
    [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
    [ring.middleware.params :refer [wrap-params]]
    [ring.util.response :as response]
    [ringline.ring :as ringline-ring]
-   [starwars.core :as core]
+   [starwars.auto :as core]
    [starwars.graphiql :as graphiql])
   (:gen-class))
 
-;; Global state for database connection and schema
-(defonce server-state (atom {:conn nil
-                             :schema nil
-                             :server nil}))
-
-(defn shutdown-database!
-  "Shutdown database connection"
-  []
-  (when-let [conn (:conn @server-state)]
-    (core/cleanup-database! conn)
-    (swap! server-state assoc :conn nil :schema nil)
-    (println "Database connection closed")))
-
-;; Health check handler
-
-(defn health-handler
-  "Health check endpoint"
-  [_request]
-  (response/response {:status "ok"
-                      :database (if (:conn @server-state) "connected" "disconnected")
-                      :schema (if (:schema @server-state) "loaded" "not-loaded")}))
+(defn cleanup-database!
+  "Clean up the database connection"
+  [conn db-uri]
+  (d/release conn)
+  (d/delete-database db-uri))
 
 
 (defn app
@@ -46,8 +31,7 @@
   [schema conn]
   (-> (reitit-ring/ring-handler
        (reitit-ring/router [["/graphql" {:post (ringline-ring/create-graphql-handler schema conn)}]
-                            ["/graphiql" {:get graphiql/graphiql-handler}]
-                            ["/health" {:get health-handler}]])
+                            ["/graphiql" {:get graphiql/graphiql-handler}]])
        (reitit-ring/create-default-handler
         {:not-found (constantly (response/response {:error "Not found"}))}))
       (wrap-json-body {:keywords? true})
@@ -58,31 +42,27 @@
 
 (defn start-server!
   "Start the Jetty HTTP server"
-  [& {:keys [port] :or {port 3000}}]
-  (let [{:keys [schema conn]} (core/create-graphql-system!)
+  [start-graphql! & {:keys [port db-uri] :or {port 3000}}]
+  (let [{:keys [schema conn]} (start-graphql! db-uri)
         server (jetty/run-jetty (app schema conn) {:port port :join? false})]
-    (swap! server-state assoc :server server)
-    (swap! server-state assoc :conn conn)
     (println (str "\n=== Ringline GraphQL Server Started ==="))
     (println (str "GraphQL endpoint: http://localhost:" port "/graphql"))
     (println (str "GraphiQL UI:      http://localhost:" port "/graphiql"))
-    (println (str "Health check:     http://localhost:" port "/health"))
     (println "\nPress Ctrl+C to stop the server\n")
-    server))
+    {:server server
+     :conn conn
+     :db-uri db-uri}))
 
 (defn stop-server!
   "Stop the Jetty HTTP server"
-  []
-  (when-let [server (:server @server-state)]
-    (.stop server)
-    (swap! server-state assoc :server nil)
-    (println "Server stopped"))
-  (shutdown-database!))
+  [{:keys [server conn db-uri]}]
+  (.stop server)
+  (cleanup-database! conn db-uri))
 
 (defn -main
   "Main entry point - starts the HTTP server"
   [& args]
   (let [port (if (first args) (Integer/parseInt (first args)) 3000)]
-    (start-server! :port port)
+    (start-server! core/create-graphql-system! :port port)
     ;; Keep the main thread alive
     @(promise)))
