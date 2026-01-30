@@ -123,7 +123,7 @@
         server-state (server/start-server! custom/create-custom-graphql-system! :db-uri db-uri :port test-port)]
     (try
 
-      (testing "Adding a human returns new human with new id"
+      (testing "Adding an org returns new org with new id"
         (let [result (graphql-request "mutation {
                     createOrganization(input:  {
                       name: \"Dean LLC\", country_of_incorporation_code: \"UK\"
@@ -136,46 +136,44 @@
                  (get-in result [:data :createOrganization :name]))
               "Returns new organization name")))
 
-      #_(let [result (graphql-request "{ human(name: \"Dean\") { id name home_planet { name } } }")
-              id (get-in result [:data :human :id])]
+      (let [result (graphql-request "{ organization(name: \"Dean LLC\") { id name country_of_incorporation_code } }")
+            id (get-in result [:data :organization :id])]
 
-          (testing "Query for human just created"
-            (is (nil? (:errors result)) "No errors in response")
-            (is (not (nil? id))
-                "Returns ID")
-            (is (= "Dean"
-                   (get-in result [:data :human :name]))
-                "Returns Dean's name")
-            (is (= "Alderaan"
-                   (get-in result [:data :human :home_planet :name]))
-                "Returns Dean's home planet"))
+        (testing "Query for org just created"
+          (is (nil? (:errors result)) "No errors in response")
+          (is (not (nil? id))
+              "Returns ID")
+          (is (= "Dean LLC"
+                 (get-in result [:data :organization :name]))
+              "Returns org's name")
+          (is (= "UK"
+                 (get-in result [:data :organization :country_of_incorporation_code]))
+              "Returns Dean's home planet"))
 
-          (testing "Update human"
-            (let [result2 (graphql-request (format "mutation {
-                        updateHuman(input:  {
-                          id: \"%s\", name: \"Dean2\", home_planet: \"TTOO\"
-                        }) { id name home_planet { name } } }" id))]
-              (is (nil? (:errors result2)) "No errors in response")
-              (is (= "Dean2"
-                     (get-in result2 [:data :updateHuman :name]))
-                  "Returns updated name")
-              (is (= "Tatooine"
-                     (get-in result2 [:data :updateHuman :home_planet :name]))
-                  "Returns updated home planet")))
+        (testing "Update org"
+          (let [result2 (graphql-request (format "mutation {
+                        updateOrganization(input:  {
+                          id: \"%s\", name: \"Dean PLC\", country_of_incorporation_code: \"US\"
+                        }) { id name country_of_incorporation_code }}" id))
+                data (-> result2 :data :updateOrganization)]
+            (is (nil? (:errors result2)) "No errors in response")
+            (is (= "Dean PLC" (:name data)) "Returns updated name")
+            (is (= "US" (:country_of_incorporation_code data)) "Returns updated code")))
 
-          (testing "Delete human"
-            (let [result3 (graphql-request (format "mutation {
-                            deleteHuman(input:  {
-                              id: \"%s\"
-                            })}" id))]
-              (is (nil? (:errors result3)) "No errors in response")
-              (is (= true (get-in result3 [:data :deleteHuman]))
-                  "Returns delete result")))
-
-          (testing "Query for human just deleted"
-            (let [result4 (graphql-request (format "{ human(id: \"%s\") { id name home_planet { name } } }" id))]
-              (is (nil? (:errors result4)) "No errors in response")
-              (is (nil? (get-in result4 [:data :human :id])) "Returns no ID"))))
+        (testing "Create party"
+          (let [result3 (graphql-request "mutation {
+                            createPii(input:  {
+                              email: \"test@example.com\"
+                            }) { id } }")
+                piiId (get-in result3 [:data :createPii :id])
+                result4 (graphql-request (format "mutation {
+                            createParty(input:  {
+                              personal_info: \"%s\", organization: \"%s\"
+                            }) { personal_info { email } organization { name } }}" piiId id))]
+            (is (nil? (:errors result3)) "No errors in response")
+            (is (not (nil? piiId)) "Returns ID")
+            (is (nil? (:errors result4)) "No errors in response")
+            (is (= {:organization {:name "Dean PLC"}, :personal_info {:email "test@example.com"}} (get-in result4 [:data :createParty])) "Returns party"))))
 
       (finally
         (server/stop-server! server-state)))))

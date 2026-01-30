@@ -6,7 +6,8 @@
   (:require [malli.core :as m]
             [ringline.mutation.parser :as parser]
             [ringline.mutation.transaction :as tx]
-            [datomic.api]))
+            [datomic.api]
+            [clojure.string :as str]))
 
 ;; T065: Implement check-operation-allowed
 (defn check-operation-allowed
@@ -157,11 +158,31 @@
                 ;; Convert enum value: replace hyphens with underscores
                 (let [converted-value (cond
                                         (string? field-value)
-                                        (keyword (clojure.string/replace field-value "-" "_"))
+                                        (keyword (str/replace field-value "-" "_"))
 
                                         (keyword? field-value)
-                                        (keyword (clojure.string/replace (name field-value) "-" "_"))
+                                        (keyword (str/replace (name field-value) "-" "_"))
 
+                                        :else field-value)]
+                  (assoc acc field-name converted-value))
+                ;; Keep value as-is
+                (assoc acc field-name field-value))))
+          {}
+          data))
+
+;; Helper function to preprocess enum values
+(defn- preprocess-uuid-values
+  "Convert enum values to match Malli schema conventions.
+   GraphQL/Lacinia uses hyphens in enum keywords, but Malli schemas use underscores."
+  [data parsed-schema]
+  (reduce (fn [acc [field-name field-value]]
+            (let [field-def (first (filter #(= field-name (:name %)) (:fields parsed-schema)))
+                  is-uuid? (and field-def (-> field-def :ref-id-field-type (= :uuid)))]
+              (if is-uuid?
+                ;; Convert enum value: replace hyphens with underscores
+                (let [converted-value (cond
+                                        (string? field-value)
+                                        (java.util.UUID/fromString field-value)
                                         :else field-value)]
                   (assoc acc field-name converted-value))
                 ;; Keep value as-is
@@ -185,7 +206,9 @@
   (let [{:keys [operation entity-type entity-id data]} mutation-input
 
         ;; Preprocess enum values: convert strings to keywords for Malli validation
-        preprocessed-data (when data (preprocess-enum-values data parsed-schema))
+        preprocessed-data (when data (-> data
+                                         (preprocess-enum-values parsed-schema)
+                                         (preprocess-uuid-values parsed-schema)))
         preprocessed-input (assoc mutation-input :data preprocessed-data)
 
         ;; Step 1: Validate input

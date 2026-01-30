@@ -50,6 +50,19 @@
              (var? (m/form s)))
     (deref (m/form s))))
 
+(defn field-type-from-schema
+  [schema field]
+  (->> schema
+       (filter vector?)
+       (map (juxt first last))
+       (into {})
+       field))
+
+(defn field-type-from-schema-var
+  [schema-var field]
+  (-> (deref schema-var)
+      (field-type-from-schema field)))
+
 
 (defn- parse-field
   "Parse a single field from Malli schema children"
@@ -64,12 +77,15 @@
                       field-type)
         cardinality (extract-cardinality field-type)
         field-props (or field-properties (m/properties schema-obj))
-        ref-to (some->  schema-obj (resolve-if-schema-var) (m/properties) :ringline/schema-name)]
+        ref-var (resolve-if-schema-var schema-obj)
+        ref-id-field-type (some-> ref-var (field-type-from-schema :id))
+        ref-to (some-> ref-var (m/properties) :ringline/schema-name)]
     {:name field-name
      :type actual-type
      :required (not (:optional field-props))  ; Check if field is optional
      :cardinality cardinality
      :enum-values (extract-enum-values schema-obj)
+     :ref-id-field-type ref-id-field-type
      :properties (if ref-to
                    (assoc field-props :ringline/ref-to ref-to)
                    field-props)}))
@@ -162,14 +178,6 @@
   (-> malli-entity
       (malli-entity->malli-field field-kw)
       (last)))
-
-(defn field-type-from-schema-var
-  [schema-var field]
-  (->> (deref schema-var)
-       (filter vector?)
-       (map (juxt first last))
-       (into {})
-       field))
 
 (defn correct-field-type [f]
   (if (is-schema-var (last f))
