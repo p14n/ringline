@@ -47,6 +47,7 @@
                          ;; Reitit - HTTP routing
                          metosin/reitit {:mvn/version "0.7.2"}
                          metosin/reitit-ring {:mvn/version "0.7.2"}
-                         clj-commons/spyscope {:mvn/version "0.1.48"}}
-            :main-opts ["-m" "starwars.server"]}}}
+                         clj-commons/spyscope {:mvn/version "0.1.48"}}}
+  :auto {:main-opts ["-m" "starwars.server" "auto"]}
+  :custom {:main-opts ["-m" "starwars.server" "custom"]}}}
 

@@ -226,7 +226,8 @@
                       pull-result (converter/pull-with-args query-ctx namespace-lookup)
                       pattern (:pattern pull-result)
                       {:keys [entity-id entity-type]} result
-                      query-result (d/pull db pattern [(keyword (entity-type namespace-lookup) "id") entity-id])
+                      lookup-key [(keyword (entity-type namespace-lookup) "id") entity-id]
+                      query-result (d/pull db pattern lookup-key)
                       transformed (transformer/transform-with-selections query-result query-ctx namespace-lookup)]
                   transformed)
                 result))

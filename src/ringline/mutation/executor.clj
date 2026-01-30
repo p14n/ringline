@@ -206,7 +206,7 @@
               result-entity-id (or entity-id
                                    (when (= operation :create)
                                      ;; Extract generated UUID from transaction
-                                     (get-in tx-data [(keyword (name entity-type) "id")])))
+                                     (get-in tx-data [(keyword (-> parsed-schema :properties :ringline/datomic-ns) "id")])))
               result-data (when (#{:create :update} operation) data)]
           (format-success-result operation entity-type result-data result-entity-id))
 

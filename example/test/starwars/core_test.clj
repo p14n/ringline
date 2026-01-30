@@ -17,6 +17,7 @@
    [clojure.test :refer [deftest is testing use-fixtures]]
    [spyscope.core]
    [starwars.auto :as auto]
+   [starwars.custom :as custom]
    [starwars.server :as server]))
 
 (def test-port 8765)
@@ -32,7 +33,7 @@
     body))
 
 (deftest auto-test
-  (let [db-uri "datomic:mem://auto-example"
+  (let [db-uri auto/db-uri
         server-state (server/start-server! auto/create-graphql-system! :db-uri db-uri :port test-port)]
     (try
       (testing "Query for human by ID returns Luke Skywalker with all fields"
@@ -113,6 +114,68 @@
           (let [result4 (graphql-request (format "{ human(id: \"%s\") { id name home_planet { name } } }" id))]
             (is (nil? (:errors result4)) "No errors in response")
             (is (nil? (get-in result4 [:data :human :id])) "Returns no ID"))))
+
+      (finally
+        (server/stop-server! server-state)))))
+
+(deftest custom-test
+  (let [db-uri custom/db-uri
+        server-state (server/start-server! custom/create-custom-graphql-system! :db-uri db-uri :port test-port)]
+    (try
+
+      (testing "Adding a human returns new human with new id"
+        (let [result (graphql-request "mutation {
+                    createOrganization(input:  {
+                      name: \"Dean LLC\", country_of_incorporation_code: \"UK\"
+                    }) { id name country_of_incorporation_code }}")]
+          (is (nil? (:errors result)) "No errors in response")
+          (is (not (nil?
+                    (get-in result [:data :createOrganization :id])))
+              "Returns new ID")
+          (is (= "Dean LLC"
+                 (get-in result [:data :createOrganization :name]))
+              "Returns new organization name")))
+
+      #_(let [result (graphql-request "{ human(name: \"Dean\") { id name home_planet { name } } }")
+              id (get-in result [:data :human :id])]
+
+          (testing "Query for human just created"
+            (is (nil? (:errors result)) "No errors in response")
+            (is (not (nil? id))
+                "Returns ID")
+            (is (= "Dean"
+                   (get-in result [:data :human :name]))
+                "Returns Dean's name")
+            (is (= "Alderaan"
+                   (get-in result [:data :human :home_planet :name]))
+                "Returns Dean's home planet"))
+
+          (testing "Update human"
+            (let [result2 (graphql-request (format "mutation {
+                        updateHuman(input:  {
+                          id: \"%s\", name: \"Dean2\", home_planet: \"TTOO\"
+                        }) { id name home_planet { name } } }" id))]
+              (is (nil? (:errors result2)) "No errors in response")
+              (is (= "Dean2"
+                     (get-in result2 [:data :updateHuman :name]))
+                  "Returns updated name")
+              (is (= "Tatooine"
+                     (get-in result2 [:data :updateHuman :home_planet :name]))
+                  "Returns updated home planet")))
+
+          (testing "Delete human"
+            (let [result3 (graphql-request (format "mutation {
+                            deleteHuman(input:  {
+                              id: \"%s\"
+                            })}" id))]
+              (is (nil? (:errors result3)) "No errors in response")
+              (is (= true (get-in result3 [:data :deleteHuman]))
+                  "Returns delete result")))
+
+          (testing "Query for human just deleted"
+            (let [result4 (graphql-request (format "{ human(id: \"%s\") { id name home_planet { name } } }" id))]
+              (is (nil? (:errors result4)) "No errors in response")
+              (is (nil? (get-in result4 [:data :human :id])) "Returns no ID"))))
 
       (finally
         (server/stop-server! server-state)))))

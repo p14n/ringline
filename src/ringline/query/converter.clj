@@ -16,12 +16,14 @@
 
 (defn- keyword->namespaced
   "Convert a simple keyword to a namespaced keyword using entity type"
-  [entity-type field-kw]
-  (keyword (some-> (if (keyword? entity-type)
-                     (name entity-type)
-                     entity-type)
-                   (str/lower-case))
-           (name field-kw)))
+  [entity-type namespace-lookup field-kw]
+  (keyword
+   (or (get namespace-lookup entity-type)
+       (some-> (if (keyword? entity-type)
+                 (name entity-type)
+                 entity-type)
+               (str/lower-case)))
+   (name field-kw)))
 
 (defn- qualified-field->simple
   "Convert a qualified field name (e.g., :User/name) to simple keyword (e.g., :name)"
@@ -156,13 +158,13 @@
         ;; Assume relationship field name matches target entity (e.g., :posts -> :post)
         target-entity (or (get namespace-lookup [entity-type field-name])
                           (keyword (str/replace (name field-name) #"s$" "")))
-        namespaced-fields (mapv #(keyword->namespaced target-entity %) nested-selections)
+        namespaced-fields (mapv #(keyword->namespaced target-entity namespace-lookup %) nested-selections)
         ;; Recursively handle deeper nesting
         nested-pulls (when (seq nested-nested)
                        (mapv (fn [[nested-field nested-data]]
                                (generate-nested-pull target-entity nested-field nested-data namespace-lookup))
                              nested-nested))]
-    {(keyword->namespaced entity-type field-name)
+    {(keyword->namespaced entity-type namespace-lookup field-name)
      (vec (concat namespaced-fields nested-pulls))}))
 
 (defn- build-pull-pattern
@@ -173,7 +175,7 @@
         nested-queries (:nested-queries query-ctx)
         ;; Convert simple selections to namespaced keywords
         simple-fields (remove #(contains? nested-queries %) selections)
-        namespaced-fields (mapv #(keyword->namespaced entity-type %) simple-fields)
+        namespaced-fields (mapv #(keyword->namespaced entity-type namespace-lookup %) simple-fields)
         ;; Generate nested pulls for relationships
         nested-pulls (mapv (fn [[field-name nested-query]]
                              (generate-nested-pull entity-type field-name nested-query namespace-lookup))
@@ -202,17 +204,17 @@
 
 (defn- argument->where-clause
   "Convert a query argument to a Datomic where clause"
-  [entity-type arg-name arg-value]
-  (let [attr (keyword->namespaced entity-type arg-name)]
+  [entity-type namespace-lookup arg-name arg-value]
+  (let [attr (keyword->namespaced entity-type namespace-lookup arg-name)]
     ['?e attr arg-value]))
 
 (defn- build-where-clauses
   "Build Datomic where clauses from query arguments"
-  [query-ctx]
+  [query-ctx namespace-lookup]
   (let [entity-type (:entity-type query-ctx)
         arguments (:arguments query-ctx)]
     (mapv (fn [[arg-name arg-value]]
-            (argument->where-clause entity-type arg-name arg-value))
+            (argument->where-clause entity-type namespace-lookup arg-name arg-value))
           arguments)))
 
 (defn pull-with-args
@@ -225,7 +227,7 @@
      Map with :pattern (pull pattern vector) and :where-clauses (datalog clauses)"
   [query-context namespace-lookup]
   (let [pattern (build-pull-pattern query-context namespace-lookup)
-        where-clauses (build-where-clauses query-context)
+        where-clauses (build-where-clauses query-context namespace-lookup)
         result {:pattern pattern
                 :where-clauses where-clauses}]
     ;; Validate the result

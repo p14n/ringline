@@ -179,7 +179,9 @@
      Map with only selected fields, using simple keywords"
   [datomic-entity query-context namespace-lookup]
   (let [entity-type (:entity-type query-context)
-        entity-ns (str/lower-case (name entity-type))
+        entity-ns (or
+                   (get namespace-lookup entity-type)
+                   (str/lower-case (name entity-type)))
         selections (:selections query-context)
         nested-queries (:nested-queries query-context)]
     (filter-by-selections datomic-entity selections nested-queries entity-ns namespace-lookup)))

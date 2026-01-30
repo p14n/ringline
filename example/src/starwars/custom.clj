@@ -16,47 +16,68 @@
             [datomic.api :as d]
             [clojure.pprint :as pprint]))
 
-;; Datomic database setup
-(def db-uri "datomic:mem://starwars-example")
-(defn cleanup-database!
-  "Clean up the database connection"
-  [conn]
-  (d/release conn)
-  (d/delete-database db-uri))
 
-(def initial-planets [{:db/id "Tatooine"
-                       :planet/id "TTOO"
-                       :planet/name "Tatooine"}
-                      {:db/id "Alderaan"
-                       :planet/id "ALDE"
-                       :planet/name "Alderaan"}])
+(declare Party)
 
-(def initial-humans [{:db/id (d/tempid :db.part/user)
-                      :human/id (d/squuid)
-                      :human/name "Luke Skywalker"
-                      :human/home_planet "Tatooine"}])
+(def PII
+  [:map
+   {:ringline/schema-name :pii
+    :ringline/datomic-ns "pii"
+    :ringline/query-root true
+    :ringline/mutations #{:create :update :delete}
+    :ringline/searchable [:id :email]
+    :ringline/datomic {:datomic/no-history true}}
+   [:id :uuid]
+   [:title {:optional true} :string]
+   [:first_name {:optional true} :string]
+   [:middle_name {:optional true} :string]
+   [:last_name {:optional true} :string]
+   [:email :string]
+   [:phone {:optional true} :string]
+   [:country_of_residence_code {:optional true} :string]
+   [:date_of_birth {:optional true} :time/local-date]])
 
-(def initial-droids [{:db/id (d/tempid :db.part/user)
-                      :droid/id "2000"
-                      :droid/name "R2-D2"
-                      :droid/primary_function "Astromech"}])
+(def Organization
+  [:map
+   {:ringline/schema-name :organization
+    :ringline/datomic-ns "org"
+    :ringline/query-root true
+    :ringline/mutations #{:create :update :delete}
+    :ringline/searchable [:id :name]}
+   [:id :uuid]
+   [:name :string]
+   [:country_of_incorporation_code :string]])
+
+(def Party
+  [:map
+   {:ringline/schema-name :party
+    :ringline/datomic-ns "party"
+    :ringline/query-root true
+    :ringline/mutations #{:create :update :delete}
+    :ringline/searchable [:id]}
+   [:id :uuid]
+   [:personal_info #'PII]
+   [:organization #'Organization]])
+
+(def db-uri "datomic:mem://starwars-custom")
 
 (defn create-custom-graphql-system!
   "Create and initialize Datomic in-memory database with schema"
-  []
+  [db-uri]
   (d/create-database db-uri)
   (let [conn (d/connect db-uri)]
     (println "Database created successfully")
-    (let [{:keys [datomic lacinia namespace-lookup schemas-map]} (ringline/init-framework [] {})
+    (let [{:keys [datomic lacinia namespace-lookup schemas-map]} (ringline/init-framework [Party Organization PII] {})
           tx-data (mapcat ringline-datomic/schema->transaction datomic)
           schema (-> lacinia
                      ;; Attach resolvers
-                     (util/inject-resolvers {:queries/human (ringline/create-resolver :human conn namespace-lookup)
-                                             :queries/droid (ringline/create-resolver :droid conn namespace-lookup)})
+                     (util/inject-resolvers {:queries/pii (ringline/create-resolver :pii conn namespace-lookup)
+                                             :queries/party (ringline/create-resolver :party conn namespace-lookup)
+                                             :queries/organization (ringline/create-resolver :organization conn namespace-lookup)})
                      (ringline/attach-mutation-resolvers schemas-map conn namespace-lookup)
                      (lacinia-schema/compile))]
       @(d/transact conn tx-data)
-      @(d/transact conn (concat initial-planets initial-humans initial-droids))
+      ;@(d/transact conn (concat initial-planets initial-humans initial-droids))
 
       {:schema schema
        :conn conn})))

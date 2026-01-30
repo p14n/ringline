@@ -52,6 +52,8 @@
 (def initial-droids [{:db/id (d/tempid :db.part/user) :droid/id "2000"
                       :droid/name "R2-D2" :droid/primary_function "Astromech"}])
 
+(def db-uri "datomic:mem://starwars-auto")
+
 (defn create-graphql-system!
   "Create and initialize Datomic in-memory database with schema"
   [db-uri]
@@ -59,6 +61,7 @@
   (let [conn (d/connect db-uri)]
     (println "Database created successfully")
     (let [{:keys [lacinia]} (ringline/auto-framework! conn schemas)]
+
       @(d/transact conn (concat initial-planets initial-humans initial-droids))
 
       {:schema lacinia

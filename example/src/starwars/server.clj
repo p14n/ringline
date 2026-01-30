@@ -15,7 +15,8 @@
    [ring.middleware.params :refer [wrap-params]]
    [ring.util.response :as response]
    [ringline.ring :as ringline-ring]
-   [starwars.auto :as core]
+   [starwars.auto :as auto]
+   [starwars.custom :as custom]
    [starwars.graphiql :as graphiql])
   (:gen-class))
 
@@ -62,7 +63,12 @@
 (defn -main
   "Main entry point - starts the HTTP server"
   [& args]
-  (let [port (if (first args) (Integer/parseInt (first args)) 3000)]
-    (start-server! core/create-graphql-system! :port port)
+  (let [example (first args)
+        port (if (second args) (Integer/parseInt (second args)) 3000)]
+    (println "Starting server on port" port)
+    (case example
+      "auto" (start-server! auto/create-graphql-system! :db-uri auto/db-uri :port port)
+      "custom" (start-server! custom/create-custom-graphql-system! :db-uri custom/db-uri :port port)
+      (start-server! auto/create-graphql-system! :port port))
     ;; Keep the main thread alive
     @(promise)))
