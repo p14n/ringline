@@ -98,9 +98,9 @@
                                namespace-lookup)
 
         ;; Attach automatic query resolvers for all entities
-        event-resolver (ringline/create-resolver :event conn)
-        task-resolver (ringline/create-resolver :task conn)
-        product-resolver (ringline/create-resolver :product conn)
+        event-resolver (ringline/create-resolver :event conn {})
+        task-resolver (ringline/create-resolver :task conn {})
+        product-resolver (ringline/create-resolver :product conn {})
         schema-with-all-resolvers (-> schema-with-mutations
                                       (assoc-in [:queries :event :resolve] event-resolver)
                                       (assoc-in [:queries :task :resolve] task-resolver)

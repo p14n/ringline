@@ -173,7 +173,19 @@
             (is (nil? (:errors result3)) "No errors in response")
             (is (not (nil? piiId)) "Returns ID")
             (is (nil? (:errors result4)) "No errors in response")
-            (is (= {:organization {:name "Dean PLC"}, :personal_info {:email "test@example.com"}} (get-in result4 [:data :createParty])) "Returns party"))))
+            (is (= {:organization {:name "Dean PLC"}, :personal_info {:email "test@example.com"}}
+                   (get-in result4 [:data :createParty])) "Returns party")))
+
+        (testing "Invite party with custom mutation"
+          (let [result5 (graphql-request
+                         (format "mutation { 
+                           inviteParty(email: \"test@example.com\", organization: \"%s\") { 
+                            personal_info { email } organization { id }
+                          } }" id))]
+            (is (nil? (:errors result5)) "No errors in response")
+            (is (= {:organization {:id id}, :personal_info {:email "test@example.com"}}
+                   (get-in result5 [:data :inviteParty])) "Returns party"))))
+
 
       (finally
         (server/stop-server! server-state)))))

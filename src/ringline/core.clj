@@ -241,6 +241,26 @@
           ;; Re-throw to let Lacinia handle error formatting
           (throw e))))))
 
+(defn do-query [{:keys [pattern where-clauses]} conn]
+  ;; Execute Datomic query
+  (if conn
+    (let [db (ensure-db conn)
+          ;; Execute query with where clauses if present
+          entities (if (seq where-clauses)
+                     (->> (d/q {:find [(list 'pull '?e pattern)]
+                                :where where-clauses} db)
+                          (map first))
+                     [])]
+      entities)
+
+    ;; No connection - return nil (useful for testing)
+    nil))
+
+(defn transform-response [entities query-ctx namespace-lookup]
+  (cond
+    (= 1 (count entities)) (transformer/transform-with-selections (first entities) query-ctx namespace-lookup)
+    (seq entities) (mapv #(transformer/transform-with-selections % query-ctx namespace-lookup) entities)
+    :else nil))
 
 (defn create-resolver
   "Create a Lacinia resolver function that uses Datomic pull.
@@ -262,8 +282,6 @@
 
    Example:
      (create-resolver :User db-conn parsed-user-schema)"
-  ([entity-type datomic-conn]
-   (create-resolver entity-type datomic-conn {}))
   ([entity-type datomic-conn namespace-lookup]
    (fn resolver [context args _value]
      (try
@@ -271,29 +289,12 @@
        (let [query-ctx (converter/build-query-context context entity-type args)
 
              ;; Convert to Datomic pull pattern with where clauses
-             pull-result (converter/pull-with-args query-ctx namespace-lookup)
-             pattern (:pattern pull-result)
-             where-clauses (:where-clauses pull-result)]
+             pull-result (converter/pull-with-args query-ctx namespace-lookup)]
 
          ;; Execute Datomic query
-         (if datomic-conn
-           (let [db (ensure-db datomic-conn)
-
-                 ;; Execute query with where clauses if present
-                 entities (if (seq where-clauses)
-                            (->> (d/q {:find [(list 'pull '?e pattern)]
-                                       :where where-clauses} db)
-                                 (map first))
-                            [])]
-
-             ;; Transform to GraphQL format
-             (cond
-               (= 1 (count entities)) (transformer/transform-with-selections (first entities) query-ctx namespace-lookup)
-               (seq entities) (mapv #(transformer/transform-with-selections % query-ctx namespace-lookup) entities)
-               :else nil))
-
-           ;; No connection - return nil (useful for testing)
-           nil))
+         (-> pull-result
+             (do-query datomic-conn)
+             (transform-response query-ctx namespace-lookup)))
 
        (catch Exception e
          (throw (ex-info "Resolver execution failed"

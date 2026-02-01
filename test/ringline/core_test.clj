@@ -66,14 +66,14 @@
     (let [schemas [fixtures/user-schema]
           framework (core/init-framework schemas {})
           mock-conn {:db-after nil}  ; Mock Datomic connection
-          resolver (core/create-resolver :User mock-conn)]
+          resolver (core/create-resolver :User mock-conn {})]
       (is (fn? resolver) "Returns a function")))
 
   (testing "create-resolver function accepts Lacinia context and args"
     (let [schemas [fixtures/user-schema]
           framework (core/init-framework schemas {})
           mock-conn {:db-after nil}
-          resolver (core/create-resolver :User mock-conn)]
+          resolver (core/create-resolver :User mock-conn {})]
       ;; Resolver should be callable with (context, args, value)
       (is (fn? resolver) "Resolver is a function")))
 
@@ -81,8 +81,8 @@
     (let [schemas [fixtures/user-schema fixtures/post-schema]
           framework (core/init-framework schemas {})
           mock-conn {:db-after nil}
-          user-resolver (core/create-resolver :User mock-conn)
-          post-resolver (core/create-resolver :Post mock-conn)]
+          user-resolver (core/create-resolver :User mock-conn {})
+          post-resolver (core/create-resolver :Post mock-conn {})]
       (is (fn? user-resolver) "User resolver is a function")
       (is (fn? post-resolver) "Post resolver is a function")
       (is (not= user-resolver post-resolver) "Different resolvers for different entities")))
@@ -90,6 +90,6 @@
   (testing "create-resolver handles nil connection gracefully"
     (let [schemas [fixtures/user-schema]
           framework (core/init-framework schemas {})
-          resolver (core/create-resolver :User nil)]
+          resolver (core/create-resolver :User nil {})]
       (is (fn? resolver) "Returns a function even with nil connection"))))
 

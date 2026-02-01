@@ -70,7 +70,6 @@
   [conn]
   (let [framework (ringline/init-framework schemas {})
         lacinia-schema (:lacinia framework)
-        parsed-schemas (:parsed framework)
         namespace-lookup (:namespace-lookup framework)
         ;; Attach mutation resolvers
         schema-with-mutations (ringline/attach-mutation-resolvers
@@ -80,7 +79,7 @@
                                namespace-lookup)
 
         ;; Attach automatic query resolver
-        user-resolver (ringline/create-resolver :user conn)
+        user-resolver (ringline/create-resolver :user conn {})
         schema-with-all-resolvers (assoc-in schema-with-mutations
                                             [:queries :user :resolve]
                                             user-resolver)]

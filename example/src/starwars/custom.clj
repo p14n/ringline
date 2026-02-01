@@ -9,12 +9,13 @@
    - Enum support (Episode)
    - Multiple entity types (Human, Droid)
    - Datomic in-memory database"
-  (:require [ringline.core :as ringline]
-            [ringline.schema.datomic :as ringline-datomic]
-            [com.walmartlabs.lacinia.schema :as lacinia-schema]
-            [com.walmartlabs.lacinia.util :as util]
-            [datomic.api :as d]
-            [clojure.pprint :as pprint]))
+  (:require
+   [com.walmartlabs.lacinia.schema :as lacinia-schema]
+   [com.walmartlabs.lacinia.util :as util]
+   [datomic.api :as d]
+   [ringline.core :as ringline]
+   [ringline.query.converter :as converter]
+   [ringline.schema.datomic :as ringline-datomic]))
 
 
 (declare Party)
@@ -61,13 +62,38 @@
 
 (def db-uri "datomic:mem://starwars-custom")
 
+(def custom-operations {:queries {:allParties {:args [:map
+                                                      [:organization :uuid]]
+                                               :return-type :Party}}
+                        :mutations {:inviteParty {:args [:map [:email :string]
+                                                         [:organization :uuid]]
+                                                  :return-type :Party}}})
+(def invite-party-mutation
+  (fn [ctx args value]
+    (println "Inviting party" args)
+    (ringline/transform-response [{:party/personal_info {:pii/email (:email args)}
+                                   :party/organization {:organization/id (:organization args)}}]
+                                 (converter/build-query-context ctx :party args)
+                                 {:pii "pii"
+                                  [:party :personal_info] "pii"
+                                  :party "party"
+                                  :organization "organization"})))
+
+(def all-parties-query
+  (fn [ctx args value]
+    (println "Querying all parties" args)
+    []))
+
 (defn create-custom-graphql-system!
   "Create and initialize Datomic in-memory database with schema"
   [db-uri]
   (d/create-database db-uri)
   (let [conn (d/connect db-uri)]
     (println "Database created successfully")
-    (let [{:keys [datomic lacinia namespace-lookup schemas-map]} (ringline/init-framework [Party Organization PII] {})
+    (let [opts {:custom-operations custom-operations
+                :resolvers {:allParties all-parties-query
+                            :inviteParty invite-party-mutation}}
+          {:keys [datomic lacinia namespace-lookup schemas-map]} (ringline/init-framework [Party Organization PII] opts)
           tx-data (mapcat ringline-datomic/schema->transaction datomic)
           schema (-> lacinia
                      ;; Attach resolvers

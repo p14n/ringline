@@ -81,7 +81,7 @@
 (def user-with-mutations-schema
   [:map
    {:ringline/schema-name :user
-    :ringline/datomic-ns :user
+    :ringline/datomic-ns "user"
     :ringline/query-root true
     :ringline/searchable [:email :username]
     :ringline/mutations #{:create :update :delete}}
@@ -94,7 +94,7 @@
 (def post-with-partial-mutations-schema
   [:map
    {:ringline/schema-name :post
-    :ringline/datomic-ns :post
+    :ringline/datomic-ns "post"
     :ringline/query-root true
     :ringline/mutations #{:create :update}}
    [:id :uuid]
