@@ -73,7 +73,8 @@
                     :description \"Search users\"}}"
   [:map
    [:args :any]                        ; Malli schema for query arguments
-   [:return-type :keyword]             ; Return type reference (e.g., :User, :string)
+   [:return-type [:or :keyword
+                  [:tuple :keyword :keyword]]] ; Return type reference (e.g., :User, :string)
    [:description {:optional true} :string]])  ; Optional GraphQL description
 
 (def CustomMutationDefinition

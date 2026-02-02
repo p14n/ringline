@@ -163,7 +163,7 @@
         (testing "Create party"
           (let [result3 (graphql-request "mutation {
                             createPii(input:  {
-                              email: \"test@example.com\"
+                              email: \"test1@example.com\"
                             }) { id } }")
                 piiId (get-in result3 [:data :createPii :id])
                 result4 (graphql-request (format "mutation {
@@ -173,19 +173,29 @@
             (is (nil? (:errors result3)) "No errors in response")
             (is (not (nil? piiId)) "Returns ID")
             (is (nil? (:errors result4)) "No errors in response")
-            (is (= {:organization {:name "Dean PLC"}, :personal_info {:email "test@example.com"}}
+            (is (= {:organization {:name "Dean PLC"}, :personal_info {:email "test1@example.com"}}
                    (get-in result4 [:data :createParty])) "Returns party")))
 
         (testing "Invite party with custom mutation"
           (let [result5 (graphql-request
                          (format "mutation { 
-                           inviteParty(email: \"test@example.com\", organization: \"%s\") { 
+                           inviteParty(email: \"test2@example.com\", organization: \"%s\") { 
                             personal_info { email } organization { id }
                           } }" id))]
             (is (nil? (:errors result5)) "No errors in response")
-            (is (= {:organization {:id id}, :personal_info {:email "test@example.com"}}
-                   (get-in result5 [:data :inviteParty])) "Returns party"))))
+            (is (= {:organization {:id id}, :personal_info {:email "test2@example.com"}}
+                   (get-in result5 [:data :inviteParty])) "Returns party")))
 
+        (testing "All parties in organization"
+          (let [result6 (graphql-request
+                         (format "{ allParties(organization: \"%s\") { personal_info { email } organization { name } }}" id))
+                data (->> result6 :data :allParties (sort-by (comp :email :personal_info)))]
+            (is (nil? (:errors result6)) "No errors in response")
+            (is (= 2 (count data)) "Returns two parties")
+            (is (= {:organization {:name "Dean PLC"}, :personal_info {:email "test1@example.com"}}
+                   (first data)) "Returns first party")
+            (is (= {:organization {:name "Dean PLC"}, :personal_info {:email "test2@example.com"}}
+                   (second data)) "Returns second party"))))
 
       (finally
         (server/stop-server! server-state)))))

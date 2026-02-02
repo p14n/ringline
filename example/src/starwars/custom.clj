@@ -14,8 +14,10 @@
    [com.walmartlabs.lacinia.util :as util]
    [datomic.api :as d]
    [ringline.core :as ringline]
-   [ringline.query.converter :as converter]
-   [ringline.schema.datomic :as ringline-datomic]))
+   [ringline.mutation.transaction :as tx]
+   [ringline.schema.datomic :as ringline-datomic])
+  (:import
+   [java.util UUID]))
 
 
 (declare Party)
@@ -64,29 +66,27 @@
 
 (def custom-operations {:queries {:allParties {:args [:map
                                                       [:organization :uuid]]
-                                               :return-type :Party}}
+                                               :return-type [:vector :Party]}}
                         :mutations {:inviteParty {:args [:map [:email :string]
                                                          [:organization :uuid]]
                                                   :return-type :Party}}})
 (def invite-party-mutation
-  (fn [ctx args value]
-    (println "Inviting party" args)
-    #_(ringline/transform-response [{:party/personal_info {:pii/email (:email args)}
-                                     :party/organization {:organization/id (:organization args)}}]
-                                   (converter/build-query-context ctx :party args)
-                                   {:pii "pii"
-                                    [:party :personal_info] "pii"
-                                    :party "party"
-                                    :organization "organization"})
-    {:personal_info {:email (:email args)}
-     :organization {:id (:organization args)}}))
-
-;Write transact-and-pull function
-;Write pull-with-wheres function test
+  (ringline/transact-and-pull
+   (fn [_ args _]
+     (println "Inviting party" args)
+     (let [piiid (tx/generate-tempid)]
+       [{:db/id piiid :pii/email (:email args)}
+        {:db/id (tx/generate-tempid)
+         :party/id (d/squuid)
+         :party/personal_info piiid
+         :party/organization [:org/id (UUID/fromString (:organization args))]}]))
+   :party :party/id))
 
 (def all-parties-query
-  (ringline/create-resolver :party (fn [_ctx args]
-                                     ['?e :party/organization (:organization args)])))
+  (ringline/create-resolver
+   :party
+   (fn [_ctx {:keys [organization]}]
+     [['?e :party/organization [:org/id (UUID/fromString organization)]]])))
 
 (defn create-custom-graphql-system!
   "Create and initialize Datomic in-memory database with schema"
@@ -107,7 +107,6 @@
                      (ringline/attach-mutation-resolvers schemas-map conn namespace-lookup)
                      (lacinia-schema/compile))]
       @(d/transact conn tx-data)
-      ;@(d/transact conn (concat initial-planets initial-humans initial-droids))
 
       {:framework framework
        :lacinia schema

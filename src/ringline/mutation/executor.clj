@@ -119,7 +119,7 @@
    :timestamp (System/currentTimeMillis)})
 
 ;; T070: Implement execute-transaction (mock for now)
-(defn- execute-transaction
+(defn execute-transaction
   "Execute a Datomic transaction.
 
    Supports both real Datomic connections and mock connections with custom transact functions.

@@ -68,6 +68,9 @@
                 (Character/isUpperCase (first name-str)))))
     type-ref
 
+    (vector? type-ref)
+    (list 'list (resolve-type-reference (second type-ref)))
+
     ;; Invalid type reference
     :else
     (throw (ex-info "Invalid type reference"

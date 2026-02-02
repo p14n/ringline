@@ -238,7 +238,7 @@
               (if-let [db (ensure-db datomic-conn)]
                 (let [query-ctx (converter/build-query-context context entity-type args)
                       ;; Convert to Datomic pull pattern with where clauses
-                      pull-result (converter/pull-with-args query-ctx namespace-lookup nil)
+                      pull-result (converter/pull-with-args query-ctx namespace-lookup)
                       pattern (:pattern pull-result)
                       {:keys [entity-id entity-type]} result
                       lookup-key [(keyword (entity-type namespace-lookup) "id") entity-id]
@@ -267,8 +267,6 @@
                           (map first))
                      [])]
       entities)
-
-    ;; No connection - return nil (useful for testing)
     nil))
 
 (defn transform-response [entities query-ctx namespace-lookup]
@@ -306,11 +304,14 @@
        (let [datomic-conn (context->conn context)
              {:keys [namespace-lookup]} (context->framework-data context)
              query-ctx (converter/build-query-context context entity-type args)
-
+             wheres (if (fn? where-clauses-or-fn)
+                      (where-clauses-or-fn context args)
+                      where-clauses-or-fn)
              ;; Convert to Datomic pull pattern with where clauses
-             pull-result (converter/pull-with-args query-ctx namespace-lookup (if (fn? where-clauses-or-fn)
-                                                                                (where-clauses-or-fn context args)
-                                                                                where-clauses-or-fn))]
+             pull-result (-> (converter/pull-with-args query-ctx namespace-lookup)
+                             (update :where-clauses (fn [clauses] (if (seq wheres)
+                                                                    (vec wheres)
+                                                                    clauses))))]
 
          ;; Execute Datomic query
          (-> pull-result
@@ -406,5 +407,45 @@
                    (lacinia-schema/compile))]
     @(d/transact conn tx-data)
     (assoc framework :lacinia schema)))
+
+(defn respond-with-error [context code message ex]
+  (resolve/with-error context {:code code
+                               :message (str message " " (if-let [cause (.getCause ex)]
+                                                           (.getMessage cause)
+                                                           (.getMessage ex)))
+                               :exception ex}))
+
+(defn pull-and-transform
+  [context args entity-id entity-type]
+  (let [datomic-conn (context->conn context)
+        {:keys [namespace-lookup]} (context->framework-data context)]
+    (when-let [db (ensure-db datomic-conn)]
+      (let [query-ctx (converter/build-query-context context entity-type args)
+            ;; Convert to Datomic pull pattern with where clauses
+            pull-result (converter/pull-with-args query-ctx namespace-lookup)
+            pattern (:pattern pull-result)
+            query-result (d/pull db pattern entity-id)
+            transformed (transformer/transform-with-selections query-result query-ctx namespace-lookup)]
+        transformed))))
+
+(defn transact-and-pull
+  [tx-data-fn response-entity-type response-id]
+  (fn [context args v]
+    (try
+      (let [datomic-conn (context->conn context)
+            tx-data (tx-data-fn context args v)
+            _tx-result (mutation-executor/execute-transaction datomic-conn tx-data)
+
+            result-entity-id (cond
+                               (keyword? response-id) (->> (map response-id tx-data)
+                                                           (filter some?)
+                                                           (first)
+                                                           (conj [response-id])
+                                                           (vec))
+                               :else response-id)]
+        (pull-and-transform context args result-entity-id response-entity-type))
+
+      (catch Exception e
+        (respond-with-error context :TRANSACTION_FAILED "Datomic transaction failed" e)))))
 
 
