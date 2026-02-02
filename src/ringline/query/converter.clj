@@ -225,9 +225,11 @@
    
    Returns:
      Map with :pattern (pull pattern vector) and :where-clauses (datalog clauses)"
-  [query-context namespace-lookup]
+  [query-context namespace-lookup extra-wheres]
   (let [pattern (build-pull-pattern query-context namespace-lookup)
-        where-clauses (build-where-clauses query-context namespace-lookup)
+        where-clauses (-> (build-where-clauses query-context namespace-lookup)
+                          (concat extra-wheres)
+                          (vec))
         result {:pattern pattern
                 :where-clauses where-clauses}]
     ;; Validate the result

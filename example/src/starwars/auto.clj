@@ -60,10 +60,11 @@
   (d/create-database db-uri)
   (let [conn (d/connect db-uri)]
     (println "Database created successfully")
-    (let [{:keys [lacinia]} (ringline/auto-framework! conn schemas)]
+    (let [{:keys [lacinia] :as framework} (ringline/auto-framework! conn schemas)]
 
       @(d/transact conn (concat initial-planets initial-humans initial-droids))
 
-      {:schema lacinia
+      {:lacinia lacinia
+       :framework framework
        :conn conn})))
 

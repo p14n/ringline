@@ -50,7 +50,7 @@
                   "Arguments extracted"))
 
           ;; Step 5: Convert to Datomic pull pattern
-          pull-result (converter/pull-with-args query-ctx {})
+          pull-result (converter/pull-with-args query-ctx {} nil)
 
           ;; Verify pull pattern
           _ (do

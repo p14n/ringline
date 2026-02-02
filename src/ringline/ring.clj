@@ -1,11 +1,12 @@
 (ns ringline.ring
   "Ring handlers for GraphQL API"
   (:require [com.walmartlabs.lacinia :as lacinia]
-            [ring.util.response :as response]))
+            [ring.util.response :as response]
+            [ringline.core :as ringline]))
 
 ;; GraphQL HTTP Handler
 
-(defn create-graphql-handler [schema conn]
+(defn create-graphql-handler [schema framework-data conn]
   "Handle GraphQL queries and mutations over HTTP.
 
    Expects POST requests with JSON body containing:
@@ -24,6 +25,6 @@
         (let [result (lacinia/execute schema
                                       query
                                       variables
-                                      {:conn conn
-                                       :operation-name operation-name})]
+                                      (ringline/augment-context {:operation-name operation-name}
+                                                                framework-data conn))]
           (response/response result))))))

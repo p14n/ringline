@@ -86,7 +86,7 @@
                      :selections [:id :email]
                      :arguments {:email "test@example.com"}
                      :nested-queries {}}
-          result (converter/pull-with-args query-ctx {})]
+          result (converter/pull-with-args query-ctx {} nil)]
       (is (map? result) "Returns a map")
       (is (vector? (:pattern result)) "Has pattern")
       (is (vector? (:where-clauses result)) "Has where clauses")))
@@ -96,7 +96,7 @@
                      :selections [:id :email]
                      :arguments {:email "test@example.com"}
                      :nested-queries {}}
-          result (converter/pull-with-args query-ctx {})
+          result (converter/pull-with-args query-ctx {} nil)
           where-clauses (:where-clauses result)]
       (is (seq where-clauses) "Has at least one where clause")
       (is (every? vector? where-clauses) "All where clauses are vectors")))
@@ -106,7 +106,7 @@
                      :selections [:id :email :username]
                      :arguments {:email "test@example.com" :username "testuser"}
                      :nested-queries {}}
-          result (converter/pull-with-args query-ctx {})
+          result (converter/pull-with-args query-ctx {} nil)
           where-clauses (:where-clauses result)]
       (is (>= (count where-clauses) 2) "Has where clause for each argument")))
 
@@ -115,7 +115,7 @@
                      :selections [:id :email]
                      :arguments {}
                      :nested-queries {}}
-          result (converter/pull-with-args query-ctx {})]
+          result (converter/pull-with-args query-ctx {} nil)]
       (is (empty? (:where-clauses result)) "No where clauses when no arguments")))
 
   (testing "pull-with-args preserves pull pattern"
@@ -123,7 +123,7 @@
                      :selections [:id :email]
                      :arguments {:email "test@example.com"}
                      :nested-queries {}}
-          result (converter/pull-with-args query-ctx {})
+          result (converter/pull-with-args query-ctx {} nil)
           pattern (:pattern result)]
       (is (some #(= :user/id %) pattern) "Pattern includes requested fields")
       (is (some #(= :user/email %) pattern) "Pattern includes requested fields"))))

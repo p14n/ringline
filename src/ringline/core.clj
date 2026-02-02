@@ -27,6 +27,21 @@
            [datomic Connection]
            [java.util UUID]))
 
+(defn augment-context
+  "Augment the Lacinia context with framework data for downstream resolvers."
+  [context framework-data conn]
+  (assoc context
+         :ringline {:conn conn
+                    :framework framework-data}))
+
+(defn context->framework-data [context]
+  (or (-> context :ringline :framework)
+      (throw (ex-info "Lacinia context not augmented with framework data. Use ringline/augment-context to add it." {:context context}))))
+
+(defn context->conn [context]
+  (or (-> context :ringline :conn)
+      (throw (ex-info "Lacinia context not augmented with Datomic connection. Use ringline/augment-context to add it." {:context context}))))
+
 (defn- create-entity-field-namespace-lookup
   ([parsed]
    (let [by-entity (->> parsed (map (juxt :schema-name identity)) (into {}))
@@ -223,7 +238,7 @@
               (if-let [db (ensure-db datomic-conn)]
                 (let [query-ctx (converter/build-query-context context entity-type args)
                       ;; Convert to Datomic pull pattern with where clauses
-                      pull-result (converter/pull-with-args query-ctx namespace-lookup)
+                      pull-result (converter/pull-with-args query-ctx namespace-lookup nil)
                       pattern (:pattern pull-result)
                       {:keys [entity-id entity-type]} result
                       lookup-key [(keyword (entity-type namespace-lookup) "id") entity-id]
@@ -282,14 +297,20 @@
 
    Example:
      (create-resolver :User db-conn parsed-user-schema)"
-  ([entity-type datomic-conn namespace-lookup]
+  ([entity-type]
+   (create-resolver entity-type nil))
+  ([entity-type where-clauses-or-fn]
    (fn resolver [context args _value]
      (try
        ;; Build query context from Lacinia, passing args explicitly
-       (let [query-ctx (converter/build-query-context context entity-type args)
+       (let [datomic-conn (context->conn context)
+             {:keys [namespace-lookup]} (context->framework-data context)
+             query-ctx (converter/build-query-context context entity-type args)
 
              ;; Convert to Datomic pull pattern with where clauses
-             pull-result (converter/pull-with-args query-ctx namespace-lookup)]
+             pull-result (converter/pull-with-args query-ctx namespace-lookup (if (fn? where-clauses-or-fn)
+                                                                                (where-clauses-or-fn context args)
+                                                                                where-clauses-or-fn))]
 
          ;; Execute Datomic query
          (-> pull-result
@@ -321,7 +342,7 @@
      (attach-mutation-resolvers lacinia-schema {:user user-schema} db-conn)"
   [lacinia-schema schemas datomic-conn namespace-lookup]
   (if-let [mutations (:mutations lacinia-schema)]
-    (let [;; For each mutation, attach a resolver
+    (let [;; For each mutation, attach a resolver 
           schemas-map (if (map? schemas) schemas (schemas->schemas-map schemas))
           mutations-with-resolvers
           (reduce-kv
@@ -363,13 +384,13 @@
 
 (defn create-query-resolver-map
   "Create a map of automatic query resolvers for a Lacinia schema."
-  [parsed conn namespace-lookup]
+  [parsed]
   (let [root-queries (->> parsed
                           (filter #(get-in % [:properties :ringline/query-root]))
                           (map :schema-name))]
     (->> root-queries
          (map (fn [query] [(keyword (str "queries/" (name query)))
-                           (create-resolver query conn namespace-lookup)]))
+                           (create-resolver query)]))
          (into {}))))
 
 (defn auto-framework!
@@ -377,7 +398,7 @@
   [conn schemas]
   (let [{:keys [datomic lacinia namespace-lookup parsed schemas-map] :as framework} (init-framework schemas {})
         tx-data (mapcat datomic/schema->transaction datomic)
-        query-resolvers (create-query-resolver-map parsed conn namespace-lookup)
+        query-resolvers (create-query-resolver-map parsed)
         schema (-> lacinia
                    ;; Attach resolvers
                    (util/inject-resolvers query-resolvers)
@@ -385,3 +406,5 @@
                    (lacinia-schema/compile))]
     @(d/transact conn tx-data)
     (assoc framework :lacinia schema)))
+
+

@@ -29,9 +29,9 @@
 
 (defn app
   "Ring handler with middleware"
-  [schema conn]
+  [schema framework-data conn]
   (-> (reitit-ring/ring-handler
-       (reitit-ring/router [["/graphql" {:post (ringline-ring/create-graphql-handler schema conn)}]
+       (reitit-ring/router [["/graphql" {:post (ringline-ring/create-graphql-handler schema framework-data conn)}]
                             ["/graphiql" {:get graphiql/graphiql-handler}]])
        (reitit-ring/create-default-handler
         {:not-found (constantly (response/response {:error "Not found"}))}))
@@ -44,8 +44,8 @@
 (defn start-server!
   "Start the Jetty HTTP server"
   [start-graphql! & {:keys [port db-uri] :or {port 3000}}]
-  (let [{:keys [schema conn]} (start-graphql! db-uri)
-        server (jetty/run-jetty (app schema conn) {:port port :join? false})]
+  (let [{:keys [lacinia conn framework]} (start-graphql! db-uri)
+        server (jetty/run-jetty (app lacinia framework conn) {:port port :join? false})]
     (println (str "\n=== Ringline GraphQL Server Started ==="))
     (println (str "GraphQL endpoint: http://localhost:" port "/graphql"))
     (println (str "GraphiQL UI:      http://localhost:" port "/graphiql"))

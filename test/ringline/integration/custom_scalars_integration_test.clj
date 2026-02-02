@@ -98,15 +98,15 @@
                                namespace-lookup)
 
         ;; Attach automatic query resolvers for all entities
-        event-resolver (ringline/create-resolver :event conn {})
-        task-resolver (ringline/create-resolver :task conn {})
-        product-resolver (ringline/create-resolver :product conn {})
+        event-resolver (ringline/create-resolver :event)
+        task-resolver (ringline/create-resolver :task)
+        product-resolver (ringline/create-resolver :product)
         schema-with-all-resolvers (-> schema-with-mutations
                                       (assoc-in [:queries :event :resolve] event-resolver)
                                       (assoc-in [:queries :task :resolve] task-resolver)
                                       (assoc-in [:queries :product :resolve] product-resolver))]
     ;; Compile the schema
-    (lacinia-schema/compile schema-with-all-resolvers)))
+    [framework (lacinia-schema/compile schema-with-all-resolvers)]))
 
 (defn cleanup-database!
   "Clean up test database"
@@ -117,8 +117,8 @@
 
 (defn execute-query
   "Execute a GraphQL query against the schema"
-  [schema query-str conn]
-  (lacinia/execute schema query-str nil {:db-conn conn}))
+  [schema query-str conn framework]
+  (lacinia/execute schema query-str nil (ringline/augment-context {} framework conn)))
 
 ;; ============================================================================
 ;; User Story 1: Date Field Support Integration Tests (T035-T038)
@@ -128,7 +128,7 @@
 (deftest create-event-with-date-test
   (testing "Create Event with Date fields using ISO8601 format"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         (let [result (execute-query schema
                                     "mutation {
@@ -143,7 +143,7 @@
                                         registration_deadline
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (nil? (:errors result)) "No errors in response")
           (is (some? (get-in result [:data :createEvent :id]))
               "Returns generated UUID")
@@ -163,7 +163,7 @@
 (deftest query-event-with-date-test
   (testing "Query Event returns Date fields in ISO8601 format"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; First create an event
         (execute-query schema
@@ -175,11 +175,11 @@
                            id
                          }
                        }"
-                       conn)
+                       conn framework)
         ;; Then query it back
         (let [result (execute-query schema
                                     "{ event(name: \"Summer Workshop\") { id name event_date } }"
-                                    conn)]
+                                    conn framework)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "Summer Workshop"
                  (get-in result [:data :event :name]))
@@ -196,7 +196,7 @@
 (deftest update-event-date-test
   (testing "Update Event Date field"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; Create event
         (let [create-result (execute-query schema
@@ -208,7 +208,7 @@
                                                id
                                              }
                                            }"
-                                           conn)
+                                           conn framework)
               event-id (get-in create-result [:data :createEvent :id])]
           ;; Update the event date
           (let [update-result (execute-query schema
@@ -222,7 +222,7 @@
                                                       event_date
                                                     }
                                                   }")
-                                             conn)]
+                                             conn framework)]
             (is (nil? (:errors update-result)) "No errors in update")
             (is (= "2024-09-15"
                    (get-in update-result [:data :updateEvent :event_date]))
@@ -234,7 +234,7 @@
 (deftest date-validation-test
   (testing "Reject invalid date formats"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; Test invalid format (slash-separated)
         (let [result (execute-query schema
@@ -246,7 +246,7 @@
                                         id
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (some? (:errors result)) "Should have errors for invalid format"))
 
         ;; Test invalid date value (Feb 30)
@@ -259,7 +259,7 @@
                                         id
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (some? (:errors result)) "Should have errors for invalid date value"))
         (finally
           (cleanup-database! conn))))))
@@ -272,7 +272,7 @@
 (deftest create-task-with-datetime-test
   (testing "Create Task with DateTime fields using ISO8601 format with timezone"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         (let [result (execute-query schema
                                     "mutation {
@@ -291,7 +291,7 @@
                                         scheduled_for
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (nil? (:errors result)) "No errors in response")
           (is (some? (get-in result [:data :createTask :id]))
               "Returns generated UUID")
@@ -314,7 +314,7 @@
 (deftest query-task-with-datetime-test
   (testing "Query Task returns DateTime fields in ISO8601 format with timezone"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; First create a task
         (execute-query schema
@@ -329,11 +329,11 @@
                            id
                          }
                        }"
-                       conn)
+                       conn framework)
         ;; Then query it back
         (let [result (execute-query schema
                                     "{ task(title: \"Review pull request\") { id title created_at updated_at } }"
-                                    conn)]
+                                    conn framework)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "Review pull request"
                  (get-in result [:data :task :title]))
@@ -354,7 +354,7 @@
 (deftest datetime-timezone-handling-test
   (testing "DateTime values are handled correctly with timezone information"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; Create task with specific timezone
         (let [create-result (execute-query schema
@@ -370,7 +370,7 @@
                                                created_at
                                              }
                                            }"
-                                           conn)]
+                                           conn framework)]
           (is (nil? (:errors create-result)) "No errors in create")
           ;; Note: Current implementation stores as UTC Instant
           ;; The returned value will be in UTC timezone
@@ -383,7 +383,7 @@
 (deftest datetime-validation-test
   (testing "Reject datetime without timezone"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; Test missing timezone
         (let [result (execute-query schema
@@ -398,7 +398,7 @@
                                         id
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (some? (:errors result)) "Should have errors for missing timezone"))
 
         ;; Test invalid time values
@@ -414,7 +414,7 @@
                                         id
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (some? (:errors result)) "Should have errors for invalid hour"))
 
         ;; Test invalid timezone offset
@@ -428,7 +428,7 @@
                                         id
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (some? (:errors result)) "Should have errors for invalid timezone offset"))
         (finally
           (cleanup-database! conn))))))
@@ -441,7 +441,7 @@
 (deftest create-task-with-enum-test
   (testing "Create Task with Enum fields (status, priority)"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         (let [result (execute-query schema
                                     "mutation {
@@ -458,7 +458,7 @@
                                         priority
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (nil? (:errors result)) "No errors in response")
           (is (some? (get-in result [:data :createTask :id]))
               "Returns generated UUID")
@@ -478,7 +478,7 @@
 (deftest query-task-with-enum-test
   (testing "Query Task returns Enum fields as strings"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; First create a task
         (execute-query schema
@@ -493,11 +493,11 @@
                            id
                          }
                        }"
-                       conn)
+                       conn framework)
         ;; Then query it back
         (let [result (execute-query schema
                                     "{ task(title: \"Review code\") { id title status priority } }"
-                                    conn)]
+                                    conn framework)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "Review code"
                  (get-in result [:data :task :title]))
@@ -515,7 +515,7 @@
 (deftest enum-validation-test
   (testing "Reject invalid enum values with helpful error messages"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; Test completely invalid value
         (let [result (execute-query schema
@@ -530,7 +530,7 @@
                                         id
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (some? (:errors result)) "Should have errors for invalid enum value")
           ;; Note: Error message validation would require checking the actual error message
           ;; which depends on how Lacinia/Malli validation errors are formatted
@@ -549,7 +549,7 @@
                                         id
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (some? (:errors result)) "Should have errors for case mismatch")
           ;; The error message should suggest "draft" instead of "Draft"
           )
@@ -567,7 +567,7 @@
                                         id
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (some? (:errors result)) "Should have errors for uppercase priority")
           ;; The error message should suggest "high" instead of "HIGH"
           )
@@ -578,7 +578,7 @@
 (deftest all-enum-features-test
   (testing "Complete enum workflow - create, query, validate"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; Create task with all enum values
         (let [create-result (execute-query schema
@@ -596,7 +596,7 @@
                                                priority
                                              }
                                            }"
-                                           conn)]
+                                           conn framework)]
           (is (nil? (:errors create-result)) "No errors in create")
           (is (= "completed" (get-in create-result [:data :createTask :status]))
               "Status is serialized as string")
@@ -606,7 +606,7 @@
         ;; Query back and verify
         (let [query-result (execute-query schema
                                           "{ task(title: \"Complete enum test\") { status priority } }"
-                                          conn)]
+                                          conn framework)]
           (is (nil? (:errors query-result)) "No errors in query")
           (is (= "completed" (get-in query-result [:data :task :status]))
               "Status persists correctly")
@@ -625,7 +625,7 @@
 (deftest create-product-with-decimal-test
   (testing "Create Product with Decimal fields (price, weight)"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         (let [result (execute-query schema
                                     "mutation {
@@ -640,7 +640,7 @@
                                         weight_kg
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (nil? (:errors result)) "No errors in response")
           (is (some? (get-in result [:data :createProduct :id]))
               "Returns generated UUID")
@@ -660,7 +660,7 @@
 (deftest query-product-with-decimal-test
   (testing "Query Product returns Decimal fields as strings"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; First create a product
         (execute-query schema
@@ -673,11 +673,11 @@
                            id
                          }
                        }"
-                       conn)
+                       conn framework)
         ;; Then query it back
         (let [result (execute-query schema
                                     "{ product(name: \"Standard Widget\") { id name price weight_kg } }"
-                                    conn)]
+                                    conn framework)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "Standard Widget"
                  (get-in result [:data :product :name]))
@@ -695,7 +695,7 @@
 (deftest decimal-precision-preservation-test
   (testing "Maintain full precision through create and query"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; Create product with high-precision decimal
         (execute-query schema
@@ -708,11 +708,11 @@
                            id
                          }
                        }"
-                       conn)
+                       conn framework)
         ;; Query back and verify precision
         (let [result (execute-query schema
                                     "{ product(name: \"Precision Test\") { price weight_kg } }"
-                                    conn)]
+                                    conn framework)]
           (is (nil? (:errors result)) "No errors in response")
           (is (= "1234567890.1234567890"
                  (get-in result [:data :product :price]))
@@ -727,7 +727,7 @@
 (deftest decimal-limit-violations-test
   (testing "Reject decimal values exceeding precision/scale limits"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; Test precision limit (39 digits - should fail)
         (let [result (execute-query schema
@@ -739,7 +739,7 @@
                                         id
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (some? (:errors result)) "Should have errors for precision violation"))
 
         ;; Test scale limit (11 decimal places - should fail)
@@ -752,7 +752,7 @@
                                         id
                                       }
                                     }"
-                                    conn)]
+                                    conn framework)]
           (is (some? (:errors result)) "Should have errors for scale violation"))
         (finally
           (cleanup-database! conn))))))
@@ -761,7 +761,7 @@
 (deftest all-decimal-features-test
   (testing "Complete decimal workflow - create, query, precision preservation"
     (let [conn (create-test-database!)
-          schema (create-test-schema conn)]
+          [framework schema] (create-test-schema conn)]
       (try
         ;; Create product with various decimal values
         (let [create-result (execute-query schema
@@ -777,7 +777,7 @@
                                                weight_kg
                                              }
                                            }"
-                                           conn)]
+                                           conn framework)]
           (is (nil? (:errors create-result)) "No errors in create")
           (is (= "99.99" (get-in create-result [:data :createProduct :price]))
               "Price is serialized as string")
@@ -787,7 +787,7 @@
         ;; Query back and verify
         (let [query-result (execute-query schema
                                           "{ product(name: \"Complete Test\") { price weight_kg } }"
-                                          conn)]
+                                          conn framework)]
           (is (nil? (:errors query-result)) "No errors in query")
           (is (= "99.99" (get-in query-result [:data :product :price]))
               "Price persists correctly")

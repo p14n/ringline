@@ -31,7 +31,7 @@
                        {:selections {:id {} :email {}}
                         :arguments {:email "test@example.com"}}}
           query-ctx (converter/build-query-context lacinia-ctx :User)
-          result (converter/pull-with-args query-ctx {})]
+          result (converter/pull-with-args query-ctx {} nil)]
 
       (is (vector? (:pattern result)) "Has pull pattern")
       (is (vector? (:where-clauses result)) "Has where clauses")
@@ -71,7 +71,7 @@
                        {:selections {:id {} :email {} :username {}}
                         :arguments {:email "test@example.com" :username "testuser"}}}
           query-ctx (converter/build-query-context lacinia-ctx :User)
-          result (converter/pull-with-args query-ctx {})]
+          result (converter/pull-with-args query-ctx {} nil)]
 
       (is (>= (count (:where-clauses result)) 2)
           "Generates where clause for each argument")))
@@ -81,7 +81,7 @@
                        {:selections {:id {} :email {}}
                         :arguments {}}}
           query-ctx (converter/build-query-context lacinia-ctx :User)
-          result (converter/pull-with-args query-ctx {})]
+          result (converter/pull-with-args query-ctx {} nil)]
 
       (is (empty? (:where-clauses result)) "No where clauses when no arguments")))
 
@@ -92,7 +92,7 @@
                                      :posts {:selections {:id {} :title {}}}}
                         :arguments {:email "test@example.com"}}}
           query-ctx (converter/build-query-context lacinia-ctx :User)
-          result (converter/pull-with-args query-ctx {})]
+          result (converter/pull-with-args query-ctx {} nil)]
       (is (vector? (:pattern result)) "Has pull pattern")
       (is (seq (:where-clauses result)) "Has where clauses")
       (is (some map? (:pattern result)) "Pattern includes nested pulls"))))

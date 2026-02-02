@@ -71,18 +71,22 @@
 (def invite-party-mutation
   (fn [ctx args value]
     (println "Inviting party" args)
-    (ringline/transform-response [{:party/personal_info {:pii/email (:email args)}
-                                   :party/organization {:organization/id (:organization args)}}]
-                                 (converter/build-query-context ctx :party args)
-                                 {:pii "pii"
-                                  [:party :personal_info] "pii"
-                                  :party "party"
-                                  :organization "organization"})))
+    #_(ringline/transform-response [{:party/personal_info {:pii/email (:email args)}
+                                     :party/organization {:organization/id (:organization args)}}]
+                                   (converter/build-query-context ctx :party args)
+                                   {:pii "pii"
+                                    [:party :personal_info] "pii"
+                                    :party "party"
+                                    :organization "organization"})
+    {:personal_info {:email (:email args)}
+     :organization {:id (:organization args)}}))
+
+;Write transact-and-pull function
+;Write pull-with-wheres function test
 
 (def all-parties-query
-  (fn [ctx args value]
-    (println "Querying all parties" args)
-    []))
+  (ringline/create-resolver :party (fn [_ctx args]
+                                     ['?e :party/organization (:organization args)])))
 
 (defn create-custom-graphql-system!
   "Create and initialize Datomic in-memory database with schema"
@@ -93,17 +97,18 @@
     (let [opts {:custom-operations custom-operations
                 :resolvers {:allParties all-parties-query
                             :inviteParty invite-party-mutation}}
-          {:keys [datomic lacinia namespace-lookup schemas-map]} (ringline/init-framework [Party Organization PII] opts)
+          {:keys [datomic lacinia namespace-lookup schemas-map] :as framework} (ringline/init-framework [Party Organization PII] opts)
           tx-data (mapcat ringline-datomic/schema->transaction datomic)
           schema (-> lacinia
                      ;; Attach resolvers
-                     (util/inject-resolvers {:queries/pii (ringline/create-resolver :pii conn namespace-lookup)
-                                             :queries/party (ringline/create-resolver :party conn namespace-lookup)
-                                             :queries/organization (ringline/create-resolver :organization conn namespace-lookup)})
+                     (util/inject-resolvers {:queries/pii (ringline/create-resolver :pii)
+                                             :queries/party (ringline/create-resolver :party)
+                                             :queries/organization (ringline/create-resolver :organization)})
                      (ringline/attach-mutation-resolvers schemas-map conn namespace-lookup)
                      (lacinia-schema/compile))]
       @(d/transact conn tx-data)
       ;@(d/transact conn (concat initial-planets initial-humans initial-droids))
 
-      {:schema schema
+      {:framework framework
+       :lacinia schema
        :conn conn})))
