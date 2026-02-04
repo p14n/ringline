@@ -80,7 +80,21 @@
           user-schema (first (filter #(= :user (:schema-name %)) result))]
       (is (seq (:fields user-schema)) "Preserves fields")
       (is (seq (:properties user-schema)) "Preserves properties")
-      (is (seq (:relationships user-schema)) "Preserves relationships"))))
+      (is (seq (:relationships user-schema)) "Preserves relationships")))
+
+  (testing "parse-schemas resolves nested refs"
+    (let [result (parser/parse-schemas (ringline/schemas->schemas-map [fixtures/profile-schema fixtures/status-schema]))
+          profile-schema (first (filter #(= :profile (:schema-name %)) result))
+          fields (:fields profile-schema)
+          statuses-field (first (filter #(= :statuses (:name %)) fields))]
+      (is (=  {:cardinality :many,
+               :enum-values nil,
+               :name :statuses,
+               :properties {:ringline/ref-to :status},
+               :ref-id-field-type :uuid,
+               :required true,
+               :type :malli.core/schema} statuses-field) "Identifies nested ref type"))))
+
 
 ;; ============================================================================
 ;; NOTE: Tests for parse-custom-query and parse-custom-mutation removed

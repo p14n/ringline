@@ -36,19 +36,27 @@
   "Extract the actual type from a ref field (handles vectors of refs)"
   [field-schema]
   (let [field-type (m/type field-schema)]
-    (if (types/collection-type? field-type)
-      ;; For [:vector :uuid], get the inner type
-      ;; Note: m/children returns Malli schema objects, not raw keywords
-      (let [children (m/children field-schema)]
-        (when (seq children)
-          (m/type (first children))))
-      ;; For direct types
-      field-type)))
+    (cond (types/collection-type? field-type)
+          (let [children (m/children field-schema)]
+            (when (seq children)
+              (extract-ref-type (first children))))
+          (= :ref field-type)
+          (let [children (m/children field-schema)]
+            (when (seq children)
+              (extract-ref-type (first children))))
+          :else field-type)))
 
 (defn resolve-if-schema-var [s]
-  (when (and (= (m/type s) :malli.core/schema)
-             (var? (m/form s)))
-    (deref (m/form s))))
+  (let [t (m/type s)]
+    (cond (and (= t :malli.core/schema)
+               (var? (m/form s)))
+          (deref (m/form s))
+
+          (some #{:ref :vector} [t])
+          (let [children (m/children s)]
+            (when (seq children)
+              (resolve-if-schema-var (first children))))
+          :else nil)))
 
 (defn field-type-from-schema
   [schema field]
@@ -67,7 +75,7 @@
 (defn- parse-field
   "Parse a single field from Malli schema children"
   [[field-name field-properties field-schema]]
-  ;; Convert raw vector/keyword to Malli schema object if needed
+  ;; Convert raw vector/keyword to Malli schema object if needed 
   (let [schema-obj (if (or (vector? field-schema) (keyword? field-schema))
                      (m/schema field-schema)
                      field-schema)

@@ -135,6 +135,7 @@
   (let [field-name (:name field)
         ;; Check if this field is a relationship
         rel (first (filter #(= field-name (:field %)) relationships))]
+
     (if rel
       ;; Relationship field - use target entity type
       {:type (if (= :many (:cardinality field))
@@ -145,7 +146,6 @@
 
 (defn- fields->graphql-fields
   "Convert all fields to Lacinia field definitions.
-
    Field names are used as-is (no conversion)."
   [fields relationships]
   (into {}

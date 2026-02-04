@@ -56,27 +56,31 @@
 
 (defn- field->attribute
   "Convert a parsed field to a Datomic attribute definition"
-  [field entity-namespace]
+  [field entity-namespace entity-datomic-properties]
   (let [datomic-type (field->datomic-type field)
         cardinality (field->datomic-cardinality field)
         ident (apply-namespace (:name field) entity-namespace)
         ;; ID fields should be unique identities for lookup refs
         is-id-field? (= :id (:name field))]
-    (cond-> {:db/ident ident
-             :db/valueType datomic-type
-             :db/cardinality cardinality}
+    (cond-> (merge entity-datomic-properties
+                   {:db/ident ident
+                    :db/valueType datomic-type
+                    :db/cardinality cardinality})
       ;; Add uniqueness constraint for ID fields
       is-id-field?
       (assoc :db/unique :db.unique/identity)
 
       ;; Add doc if field has properties with documentation
       (get-in field [:properties :doc])
-      (assoc :db/doc (get-in field [:properties :doc])))))
+      (assoc :db/doc (get-in field [:properties :doc]))
+
+      (get-in field [:properties :ringline/datomic])
+      (merge (get-in field [:properties :ringline/datomic])))))
 
 (defn- fields->attributes
   "Convert all fields to Datomic attributes"
-  [fields entity-namespace]
-  (mapv #(field->attribute % entity-namespace) fields))
+  [fields entity-namespace entity-datomic-properties]
+  (mapv #(field->attribute % entity-namespace entity-datomic-properties) fields))
 
 ;; Main generation functions
 
@@ -90,7 +94,8 @@
      DatomicSchema map with :source-entity and :attributes"
   [parsed-schema]
   (let [entity-namespace (get-entity-namespace parsed-schema)
-        attributes (fields->attributes (:fields parsed-schema) entity-namespace)
+        entity-datomic-properties (get-in parsed-schema [:properties :ringline/datomic])
+        attributes (fields->attributes (:fields parsed-schema) entity-namespace entity-datomic-properties)
         result {:source-entity (:schema-name parsed-schema)
                 :attributes attributes}]
     ;; Validate the result

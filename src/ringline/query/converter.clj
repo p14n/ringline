@@ -152,7 +152,7 @@
 
 (defn- generate-nested-pull
   "Generate nested pull pattern for a relationship field"
-  [entity-type field-name nested-query namespace-lookup]
+  [entity-type field-name nested-query namespace-lookup reverse-lookups]
   (let [nested-selections (:selections nested-query)
         nested-nested (:nested-queries nested-query)
         ;; Assume relationship field name matches target entity (e.g., :posts -> :post)
@@ -162,14 +162,17 @@
         ;; Recursively handle deeper nesting
         nested-pulls (when (seq nested-nested)
                        (mapv (fn [[nested-field nested-data]]
-                               (generate-nested-pull target-entity nested-field nested-data namespace-lookup))
-                             nested-nested))]
-    {(keyword->namespaced entity-type namespace-lookup field-name)
+                               (generate-nested-pull target-entity nested-field nested-data namespace-lookup reverse-lookups))
+                             nested-nested))
+        reverse-lookup (get reverse-lookups [entity-type field-name])]
+    {(or
+      (when reverse-lookup [reverse-lookup :as (keyword->namespaced entity-type namespace-lookup field-name)])
+      (keyword->namespaced entity-type namespace-lookup field-name))
      (vec (concat namespaced-fields nested-pulls))}))
 
 (defn- build-pull-pattern
   "Build Datomic pull pattern from query context"
-  [query-ctx namespace-lookup]
+  [query-ctx namespace-lookup reverse-lookups]
   (let [entity-type (:entity-type query-ctx)
         selections (:selections query-ctx)
         nested-queries (:nested-queries query-ctx)
@@ -178,7 +181,7 @@
         namespaced-fields (mapv #(keyword->namespaced entity-type namespace-lookup %) simple-fields)
         ;; Generate nested pulls for relationships
         nested-pulls (mapv (fn [[field-name nested-query]]
-                             (generate-nested-pull entity-type field-name nested-query namespace-lookup))
+                             (generate-nested-pull entity-type field-name nested-query namespace-lookup reverse-lookups))
                            nested-queries)]
     (vec (concat namespaced-fields nested-pulls))))
 
@@ -191,7 +194,7 @@
    Returns:
      PullPattern map with :pattern vector"
   [query-context]
-  (let [pattern (build-pull-pattern query-context {})
+  (let [pattern (build-pull-pattern query-context {} {})
         result {:pattern pattern}]
     ;; Validate the result
     (when-not (m/validate PullPattern result)
@@ -225,8 +228,8 @@
    
    Returns:
      Map with :pattern (pull pattern vector) and :where-clauses (datalog clauses)"
-  [query-context namespace-lookup]
-  (let [pattern (build-pull-pattern query-context namespace-lookup)
+  [query-context namespace-lookup reverse-lookups]
+  (let [pattern (build-pull-pattern query-context namespace-lookup reverse-lookups)
         where-clauses (build-where-clauses query-context namespace-lookup)
         result {:pattern pattern
                 :where-clauses where-clauses}]

@@ -76,7 +76,8 @@
                                lacinia-schema
                                (ringline/schemas->schemas-map schemas)
                                conn
-                               namespace-lookup)
+                               namespace-lookup
+                               {})
 
         ;; Attach automatic query resolver
         user-resolver (ringline/create-resolver :user)

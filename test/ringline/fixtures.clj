@@ -57,7 +57,8 @@
 ;; Schema with enum type
 (def status-schema
   [:map
-   {:ringline/datomic-ns :task}
+   {:ringline/schema-name :status
+    :ringline/datomic-ns :task}
    [:id :uuid]
    [:status [:enum :pending :in-progress :completed :cancelled]]
    [:title :string]])
@@ -65,8 +66,10 @@
 ;; Schema with nested maps
 (def profile-schema
   [:map
-   {:ringline/datomic-ns :profile}
+   {:ringline/schema-name :profile
+    :ringline/datomic-ns :profile}
    [:id :uuid]
+   [:statuses [:vector [:ref #'status-schema]]]
    [:user :uuid]  ; Reference (using :uuid instead of :ref)
    [:settings [:map
                [:theme [:enum :light :dark]]

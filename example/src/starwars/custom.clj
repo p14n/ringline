@@ -29,7 +29,7 @@
     :ringline/query-root true
     :ringline/mutations #{:create :update :delete}
     :ringline/searchable [:id :email]
-    :ringline/datomic {:datomic/no-history true}}
+    :ringline/datomic {:db/noHistory true}}
    [:id :uuid]
    [:title {:optional true} :string]
    [:first_name {:optional true} :string]
@@ -39,6 +39,28 @@
    [:phone {:optional true} :string]
    [:country_of_residence_code {:optional true} :string]
    [:date_of_birth {:optional true} :time/local-date]])
+
+(def Address
+  [:map
+   {:ringline/schema-name :address
+    :ringline/datomic-ns "address"
+    :ringline/mutations #{:create :update :delete}}
+   [:id :uuid]
+   [:street :string]
+   [:city :string]
+   [:state {:optional true} :string]
+   [:postal_code :string]
+   [:country_code :string]])
+
+(def PartyAddress
+  [:map
+   {:ringline/schema-name :party_address
+    :ringline/datomic-ns "party_address"
+    :ringline/mutations #{:create :update :delete}}
+   [:id :uuid]
+   [:address #'Address]
+   [:party #'Party]
+   [:primary {:optional true} :boolean]])
 
 (def Organization
   [:map
@@ -59,6 +81,7 @@
     :ringline/mutations #{:create :update :delete}
     :ringline/searchable [:id]}
    [:id :uuid]
+   [:addresses {:ringline/reverse-lookup :party-address/_party} [:vector [:ref #'PartyAddress]]]
    [:personal_info #'PII]
    [:organization #'Organization]])
 
@@ -71,7 +94,9 @@
                                                          [:organization :uuid]]
                                                   :return-type :Party}}})
 (def invite-party-mutation
+
   (ringline/transact-and-pull
+
    (fn [_ args _]
      (println "Inviting party" args)
      (let [piiid (tx/generate-tempid)]
@@ -80,6 +105,7 @@
          :party/id (d/squuid)
          :party/personal_info piiid
          :party/organization [:org/id (UUID/fromString (:organization args))]}]))
+
    :party :party/id))
 
 (def all-parties-query
@@ -97,14 +123,15 @@
     (let [opts {:custom-operations custom-operations
                 :resolvers {:allParties all-parties-query
                             :inviteParty invite-party-mutation}}
-          {:keys [datomic lacinia namespace-lookup schemas-map] :as framework} (ringline/init-framework [Party Organization PII] opts)
+          {:keys [datomic lacinia namespace-lookup schemas-map reverse-lookups] :as framework} (ringline/init-framework
+                                                                                                [Party Organization PII PartyAddress Address] opts)
           tx-data (mapcat ringline-datomic/schema->transaction datomic)
           schema (-> lacinia
                      ;; Attach resolvers
                      (util/inject-resolvers {:queries/pii (ringline/create-resolver :pii)
                                              :queries/party (ringline/create-resolver :party)
                                              :queries/organization (ringline/create-resolver :organization)})
-                     (ringline/attach-mutation-resolvers schemas-map conn namespace-lookup)
+                     (ringline/attach-mutation-resolvers schemas-map conn namespace-lookup reverse-lookups)
                      (lacinia-schema/compile))]
       @(d/transact conn tx-data)
 

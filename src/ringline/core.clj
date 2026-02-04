@@ -89,6 +89,22 @@
                 [sn schema])))
        (into {})))
 
+(defn- create-entity-field-reverse-lookups
+  ([parsed]
+   (let [by-entity (->> parsed (map (juxt :schema-name identity)) (into {}))
+         lookups (->> by-entity
+                      (mapv (fn [[entity-name {:keys [fields]}]]
+                              (->> fields
+                                   (map (fn [field]
+                                          (when-let [rev (-> field :properties :ringline/reverse-lookup)]
+                                            [[entity-name (:name field)] rev])))
+                                   (remove nil?)
+                                   (vec))))
+                      (apply concat)
+                      (vec)
+                      (into {}))]
+     lookups)))
+
 ;; Framework initialization
 (defn init-framework
   "Initialize framework with Malli schemas.
@@ -162,12 +178,14 @@
           lacinia-final (if resolvers
                           (lacinia/attach-resolvers lacinia-with-mutations resolvers)
                           lacinia-with-mutations)
-          namespace-lookup (create-entity-field-namespace-lookup parsed-schemas)]
+          namespace-lookup (create-entity-field-namespace-lookup parsed-schemas)
+          reverse-lookups (create-entity-field-reverse-lookups parsed-schemas)]
       {:datomic datomic-schemas
        :lacinia lacinia-final
        :parsed parsed-schemas
        :mutations mutation-defs
        :namespace-lookup namespace-lookup
+       :reverse-lookups reverse-lookups
        :schemas-map schemas-map})
     (catch Exception e
       (throw (ex-info "Failed to initialize framework"
@@ -204,7 +222,7 @@
 
    Example:
      (create-mutation-resolver :User :create db-conn user-schema)"
-  [entity-type operation datomic-conn schema namespace-lookup]
+  [entity-type operation datomic-conn schema namespace-lookup reverse-lookups]
   ;; Parse the schema once when creating the resolver
   (let [parsed-schema (parser/parse-schema entity-type schema)]
     (fn resolver [context args _value]
@@ -238,7 +256,7 @@
               (if-let [db (ensure-db datomic-conn)]
                 (let [query-ctx (converter/build-query-context context entity-type args)
                       ;; Convert to Datomic pull pattern with where clauses
-                      pull-result (converter/pull-with-args query-ctx namespace-lookup)
+                      pull-result (converter/pull-with-args query-ctx namespace-lookup reverse-lookups)
                       pattern (:pattern pull-result)
                       {:keys [entity-id entity-type]} result
                       lookup-key [(keyword (entity-type namespace-lookup) "id") entity-id]
@@ -302,13 +320,13 @@
      (try
        ;; Build query context from Lacinia, passing args explicitly
        (let [datomic-conn (context->conn context)
-             {:keys [namespace-lookup]} (context->framework-data context)
+             {:keys [namespace-lookup reverse-lookups]} (context->framework-data context)
              query-ctx (converter/build-query-context context entity-type args)
              wheres (if (fn? where-clauses-or-fn)
                       (where-clauses-or-fn context args)
                       where-clauses-or-fn)
              ;; Convert to Datomic pull pattern with where clauses
-             pull-result (-> (converter/pull-with-args query-ctx namespace-lookup)
+             pull-result (-> (converter/pull-with-args query-ctx namespace-lookup reverse-lookups)
                              (update :where-clauses (fn [clauses] (if (seq wheres)
                                                                     (vec wheres)
                                                                     clauses))))]
@@ -341,7 +359,7 @@
 
    Example:
      (attach-mutation-resolvers lacinia-schema {:user user-schema} db-conn)"
-  [lacinia-schema schemas datomic-conn namespace-lookup]
+  [lacinia-schema schemas datomic-conn namespace-lookup reverse-lookups]
   (if-let [mutations (:mutations lacinia-schema)]
     (let [;; For each mutation, attach a resolver 
           schemas-map (if (map? schemas) schemas (schemas->schemas-map schemas))
@@ -373,7 +391,8 @@
                                          operation
                                          datomic-conn
                                          schema
-                                         namespace-lookup)))
+                                         namespace-lookup
+                                         reverse-lookups)))
                  ;; No schema found, keep mutation as-is
                  (assoc acc mutation-name mutation-def))))
            {}
@@ -397,13 +416,13 @@
 (defn auto-framework!
   "Calls init-framework and then transacts the Datomic schema and compiles the Lacinia schema with automatic resolvers."
   [conn schemas]
-  (let [{:keys [datomic lacinia namespace-lookup parsed schemas-map] :as framework} (init-framework schemas {})
+  (let [{:keys [datomic lacinia namespace-lookup parsed schemas-map reverse-lookups] :as framework} (init-framework schemas {})
         tx-data (mapcat datomic/schema->transaction datomic)
         query-resolvers (create-query-resolver-map parsed)
         schema (-> lacinia
                    ;; Attach resolvers
                    (util/inject-resolvers query-resolvers)
-                   (attach-mutation-resolvers schemas-map conn namespace-lookup)
+                   (attach-mutation-resolvers schemas-map conn namespace-lookup reverse-lookups)
                    (lacinia-schema/compile))]
     @(d/transact conn tx-data)
     (assoc framework :lacinia schema)))
@@ -418,11 +437,11 @@
 (defn pull-and-transform
   [context args entity-id entity-type]
   (let [datomic-conn (context->conn context)
-        {:keys [namespace-lookup]} (context->framework-data context)]
+        {:keys [namespace-lookup reverse-lookups]} (context->framework-data context)]
     (when-let [db (ensure-db datomic-conn)]
       (let [query-ctx (converter/build-query-context context entity-type args)
             ;; Convert to Datomic pull pattern with where clauses
-            pull-result (converter/pull-with-args query-ctx namespace-lookup)
+            pull-result (converter/pull-with-args query-ctx namespace-lookup reverse-lookups)
             pattern (:pattern pull-result)
             query-result (d/pull db pattern entity-id)
             transformed (transformer/transform-with-selections query-result query-ctx namespace-lookup)]

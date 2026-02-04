@@ -95,7 +95,8 @@
                                lacinia-schema
                                schemas
                                conn
-                               namespace-lookup)
+                               namespace-lookup
+                               {})
 
         ;; Attach automatic query resolvers for all entities
         event-resolver (ringline/create-resolver :event)
