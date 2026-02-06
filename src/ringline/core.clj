@@ -302,17 +302,13 @@
   (if conn
     (try (let [db (ensure-db conn)
                ;; Execute query with where clauses if present
-               _ (println "Where clauses: " where-clauses)
-               _ (println pattern)
                entities (if (seq where-clauses)
                           (->> (d/q {:find [(list 'pull '?e pattern)]
                                      :where where-clauses} db)
                                (map first))
-                          [])
-               _ (println "Entities: " entities)]
+                          [])]
            entities)
          (catch Exception e
-           (.printStackTrace e)
            (throw (ex-info "Datomic query failed" {:pattern pattern
                                                    :where-clauses where-clauses}
                            e))))

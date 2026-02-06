@@ -214,16 +214,12 @@
                                                                 id
                                                               } }" pid address-id))
                     result9 (graphql-request
-                             (format "query { party(id:\"%s\" ) { id addresses { address { id city }} } }" pid))]
-                ;(is (nil? result7))
-                ;(is (nil? result8))
-                ;(is (nil? result9))
+                             (format "query { party(id:\"%s\" ) { addresses { address { city postal_code}} } }" pid))
+                    data9 (get-in result9 [:data :party])]
                 (is (nil? (:errors result7)) "No errors in response")
-                (is (nil? (:errors result8)) "No errors in response")))))
-
-
-        ;
-        )
+                (is (nil? (:errors result8)) "No errors in response")
+                (is (=  {:addresses [{:address {:city "Anytown", :postal_code "12345"}}]}
+                        data9)))))))
 
       (finally
         (server/stop-server! server-state)))))

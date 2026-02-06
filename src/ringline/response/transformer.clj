@@ -154,7 +154,9 @@
                               nested-nested (:nested-queries nested-query)
                               ;; Infer target entity namespace from field name
                               target-ns (or (get namespace-lookup [(keyword entity-ns) simple-field])
-                                            (str/replace (name field-name) #"s$" ""))
+                                            ;(str/replace (name field-name) #"s$" "")
+                                            (name field-name))
+
                               transformed-value (cond
                                                   (vector? value)
                                                   (mapv #(filter-by-selections % nested-selections nested-nested target-ns namespace-lookup) value)
@@ -166,7 +168,7 @@
                           [simple-field transformed-value])
                         ;; Regular field - transform value
                         [simple-field (transform-value value)])))))
-              selections)))
+              (concat selections (keys nested-queries)))))
 
 (defn transform-with-selections
   "Transform entity including only requested GraphQL selections.

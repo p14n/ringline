@@ -30,48 +30,6 @@
   [qualified-kw]
   (some-> qualified-kw (name) (keyword)))
 
-(defn- extract-selections-from-tree
-  "Extract field selections from Lacinia selections-tree format.
-
-   The selections-tree returns a map like:
-   {:User/name [nil]
-    :User/email [nil]
-    :User/posts [{:selections {:Post/title [nil]}}]}"
-  [selections-tree]
-  (when selections-tree
-    (vec (keys selections-tree))))
-
-
-
-
-#_(defn- extract-nested-from-tree-map
-    [[field-name field-data-vec]]
-    (println "extract-nested-from-tree 0.1" field-name field-data-vec)
-
-    ;; field-data-vec is a vector of how the field is used
-    ;; Check if any usage has :selections (indicating nested fields)
-    (when-let [nested-data (some #(when (map? %) (:selections %)) field-data-vec)]
-      (println "extract-nested-from-tree 1" nested-data field-data-vec)
-      (let [nested-tree (vals nested-data)
-            _ (println "extract-nested-from-tree 2" nested-tree)
-          ;_ (println "extract-nested-from-tree 3" (extract-nested-from-tree (first nested-tree)))
-            ;; Convert qualified field name to simple keyword
-            simple-field-name (qualified-field->simple field-name)]
-        [simple-field-name {:selections (extract-selections-from-tree nested-data)
-                            :nested-queries (extract-nested-from-tree nested-tree)}])))
-
-#_(defn extract-nested-from-tree
-    "Extract nested selections from Lacinia selections-tree format"
-    [selections-tree]
-    (println "extract-nested-from-tree 0" selections-tree)
-    (cond
-      (map? selections-tree) (into {}
-                                   (keep extract-nested-from-tree-map
-                                         selections-tree))
-      (coll? selections-tree) (->> selections-tree
-                                   (mapv extract-nested-from-tree)
-                                   (apply concat))
-      :else {}))
 (declare extract-nested-from-tree)
 
 (defn extract-nested-from-tree-kv [[k v]]
@@ -93,109 +51,22 @@
        (remove nil?)
        (into {})))
 
-(defn- extract-selections-from-map
-  "Extract field selections from test-style selection map (for backwards compatibility)"
-  [selection-map]
-  (when-let [selections (:selections selection-map)]
-    (vec (keys selections))))
-
-(defn- extract-nested-selections-from-map
-  "Extract nested selections from test-style selection map (for backwards compatibility)"
-  [selection-map]
-  (when-let [selections (:selections selection-map)]
-    (into {}
-          (keep (fn [[field-name field-data]]
-                  (when (contains? field-data :selections)
-                    [field-name {:selections (vec (keys (:selections field-data)))
-                                 :nested-queries (extract-nested-selections-from-map field-data)}]))
-                selections))))
-
-#_(defn- contains-selections?
-    [v]
-    (some->> v
-             (filter map?)
-             (some :selections)
-             (seq)))
-
-#_(defn p>> [x]
-    (println "p>> " x) x)
-
-#_(defn selection-tree-vec->pull-query* ;;;;; temporarily added 
-    [[k v]]
-    (cond
-      (nil? v)  (qualified-field->simple k)
-      (= [nil] v)  (qualified-field->simple k)
-      (contains-selections? v) {[(qualified-field->simple k)]
-                                (->> (contains-selections? v)
-                                     (mapv p>>)
-                                     (mapv #(selection-tree-vec->pull-query* %)))}
-      :else nil))
-
-#_(defn selection-tree->pull-query* ;;;;; temporarily added
-    [selection-tree]
-    (println "selection-tree->pull-query* " selection-tree)
-    (mapv selection-tree-vec->pull-query* selection-tree))
-
-
 (defn- extract-selections
   "Extract field selections from Lacinia context (handles both real and test formats)"
   [lacinia-context]
-  (cond
-    ;; Try to use Lacinia's selections-tree function (real Lacinia context)
-    (and (map? lacinia-context) (contains? lacinia-context :com.walmartlabs.lacinia/selection))
-    (try
-      (let [tree (executor/selections-tree lacinia-context)]
-        (println "extract-selections1 " tree)
-        (if tree
-          ;; Convert qualified field names to simple keywords
-          (let [;x (selection-tree->pull-query* tree)
-                ;_ (println "extract-selections 2.0 " tree)
-                ;_ (println "extract-selections 2.1 " x)
-                ;_ (println "extract-selections 2.3 " (vec (map qualified-field->simple (keys tree))))
-                ]
-            (vec (map qualified-field->simple (keys tree))))
-          []))
-      (catch Exception e
-        ;; Fall back to test format
-        (println "------------------------------------")
-        (.printStackTrace e)
-        (println "extract-selections 3")
-        (extract-selections-from-map (get lacinia-context :com.walmartlabs.lacinia/selection))))
-
-    ;; Test mock format (map with :selections key)
-    (and (map? lacinia-context) (contains? lacinia-context :selections))
-    (do
-      (println "extract-selections 4")
-      (extract-selections-from-map lacinia-context))
-
-    ;; No selections
-    :else
-    []))
+  (let [tree (executor/selections-tree lacinia-context)]
+    (if tree
+      ;; Convert qualified field names to simple keywords 
+      (vec (map qualified-field->simple (keys tree)))
+      [])))
 
 (defn- extract-nested-selections
   "Extract nested selections from Lacinia context (handles both real and test formats)"
   [lacinia-context]
-  (cond
-    ;; Try to use Lacinia's selections-tree function (real Lacinia context)
-    (and (map? lacinia-context) (contains? lacinia-context :com.walmartlabs.lacinia/selection))
-    (try
-      (let [tree (executor/selections-tree lacinia-context)]
-        (if tree
-          (extract-nested-from-tree tree)
-          {}))
-      (catch Exception e
-        (println "x------------------------------------")
-        (.printStackTrace e)
-        ;; Fall back to test format
-        (extract-nested-selections-from-map (get lacinia-context :com.walmartlabs.lacinia/selection))))
-
-    ;; Test mock format
-    (and (map? lacinia-context) (contains? lacinia-context :selections))
-    (extract-nested-selections-from-map lacinia-context)
-
-    ;; No nested selections
-    :else
-    {}))
+  (let [tree (executor/selections-tree lacinia-context)]
+    (if tree
+      (extract-nested-from-tree tree)
+      {})))
 
 ;; Query context building
 
@@ -216,11 +87,9 @@
               ;; or if it's the old test format with :selections directly
               selection (get lacinia-context :com.walmartlabs.lacinia/selection lacinia-context)
               selections (extract-selections lacinia-context)
-              _ (println "Building query context for>>>> " (type selection))
               ;; Use provided args, or fall back to extracting from selection (for test compatibility)
               arguments (or args (:arguments selection) {})
-              nested-queries (or (extract-nested-selections lacinia-context) {})
-              _ (println "Building query context for>>>>! " nested-queries)]
+              nested-queries (or (extract-nested-selections lacinia-context) {})]
           {:entity-type entity-type
            :selections selections
            :arguments arguments
@@ -238,7 +107,8 @@
         nested-nested (:nested-queries nested-query)
         ;; Assume relationship field name matches target entity (e.g., :posts -> :post)
         target-entity (or (get namespace-lookup [entity-type field-name])
-                          (keyword (str/replace (name field-name) #"s$" "")))
+                          (keyword ;(str/replace (name field-name) #"s$" "")
+                           (name field-name)))
         namespaced-fields (mapv #(keyword->namespaced target-entity namespace-lookup %) nested-selections)
         ;; Recursively handle deeper nesting
         nested-pulls (when (seq nested-nested)
@@ -254,8 +124,7 @@
 (defn- build-pull-pattern
   "Build Datomic pull pattern from query context"
   [query-ctx namespace-lookup reverse-lookups]
-  (let [_ (println "Building pull pattern for " query-ctx)
-        entity-type (:entity-type query-ctx)
+  (let [entity-type (:entity-type query-ctx)
         selections (:selections query-ctx)
         nested-queries (:nested-queries query-ctx)
         ;; Convert simple selections to namespaced keywords
