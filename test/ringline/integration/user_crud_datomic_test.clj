@@ -77,7 +77,7 @@
                                (ringline/schemas->schemas-map schemas)
                                conn
                                namespace-lookup
-                               {})
+                               {} {})
 
         ;; Attach automatic query resolver
         user-resolver (ringline/create-resolver :user)

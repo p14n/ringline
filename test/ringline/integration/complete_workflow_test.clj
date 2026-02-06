@@ -50,7 +50,7 @@
                   "Arguments extracted"))
 
           ;; Step 5: Convert to Datomic pull pattern
-          pull-result (converter/pull-with-args query-ctx {} {})
+          pull-result (converter/pull-with-args query-ctx {} {} {})
 
           ;; Verify pull pattern
           _ (do
@@ -184,7 +184,7 @@
                            mock-db-conn
                            fixtures/user-with-mutations-schema
                            namespace-lookup
-                           {})]
+                           {} {})]
 
       ;; Verify resolver is a function
       (is (fn? create-resolver) "Resolver is a function")
@@ -212,7 +212,7 @@
                                   (:lacinia framework)
                                   schemas
                                   mock-db-conn
-                                  {} {})
+                                  {} {} {})
 
           ;; Verify resolvers attached
           create-mutation (get-in lacinia-with-resolvers [:mutations :createUser])

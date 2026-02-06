@@ -96,7 +96,7 @@
                                schemas
                                conn
                                namespace-lookup
-                               {})
+                               {} {})
 
         ;; Attach automatic query resolvers for all entities
         event-resolver (ringline/create-resolver :event)

@@ -188,14 +188,42 @@
 
         (testing "All parties in organization"
           (let [result6 (graphql-request
-                         (format "{ allParties(organization: \"%s\") { personal_info { email } organization { name } }}" id))
+                         (format "{ allParties(organization: \"%s\") { id personal_info { email } organization { name } }}" id))
                 data (->> result6 :data :allParties (sort-by (comp :email :personal_info)))]
             (is (nil? (:errors result6)) "No errors in response")
             (is (= 2 (count data)) "Returns two parties")
             (is (= {:organization {:name "Dean PLC"}, :personal_info {:email "test1@example.com"}}
-                   (first data)) "Returns first party")
+                   (dissoc (first data) :id)) "Returns first party")
             (is (= {:organization {:name "Dean PLC"}, :personal_info {:email "test2@example.com"}}
-                   (second data)) "Returns second party"))))
+                   (dissoc (second data) :id)) "Returns second party")
+
+            (testing "Create address and party address"
+              (let [result7 (graphql-request
+                             (format "mutation { 
+                                               createAddress(input: {
+                                                street: \"123 Main St\", city: \"Anytown\", state: \"CA\", postal_code: \"12345\", country_code: \"US\"
+                                               }) { 
+                                                id street city state postal_code country_code
+                                              } }"))
+                    pid (-> data first :id)
+                    address-id (get-in result7 [:data :createAddress :id])
+                    result8 (graphql-request
+                             (format "mutation { createParty_address(input: {
+                                                                party:\"%s\", address:\"%s\"
+                                                               }) { 
+                                                                id
+                                                              } }" pid address-id))
+                    result9 (graphql-request
+                             (format "query { party(id:\"%s\" ) { id addresses { address { id city }} } }" pid))]
+                ;(is (nil? result7))
+                ;(is (nil? result8))
+                ;(is (nil? result9))
+                (is (nil? (:errors result7)) "No errors in response")
+                (is (nil? (:errors result8)) "No errors in response")))))
+
+
+        ;
+        )
 
       (finally
         (server/stop-server! server-state)))))

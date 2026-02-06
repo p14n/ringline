@@ -81,7 +81,7 @@
     :ringline/mutations #{:create :update :delete}
     :ringline/searchable [:id]}
    [:id :uuid]
-   [:addresses {:ringline/reverse-lookup :party-address/_party} [:vector [:ref #'PartyAddress]]]
+   [:addresses {:ringline/reverse-lookup :party_address/_party} [:vector [:ref #'PartyAddress]]]
    [:personal_info #'PII]
    [:organization #'Organization]])
 
@@ -123,15 +123,15 @@
     (let [opts {:custom-operations custom-operations
                 :resolvers {:allParties all-parties-query
                             :inviteParty invite-party-mutation}}
-          {:keys [datomic lacinia namespace-lookup schemas-map reverse-lookups] :as framework} (ringline/init-framework
-                                                                                                [Party Organization PII PartyAddress Address] opts)
+          {:keys [datomic lacinia namespace-lookup schemas-map reverse-lookups input-converters] :as framework} (ringline/init-framework
+                                                                                                                 [Party Organization PII PartyAddress Address] opts)
           tx-data (mapcat ringline-datomic/schema->transaction datomic)
           schema (-> lacinia
                      ;; Attach resolvers
                      (util/inject-resolvers {:queries/pii (ringline/create-resolver :pii)
                                              :queries/party (ringline/create-resolver :party)
                                              :queries/organization (ringline/create-resolver :organization)})
-                     (ringline/attach-mutation-resolvers schemas-map conn namespace-lookup reverse-lookups)
+                     (ringline/attach-mutation-resolvers schemas-map conn namespace-lookup reverse-lookups input-converters)
                      (lacinia-schema/compile))]
       @(d/transact conn tx-data)
 
