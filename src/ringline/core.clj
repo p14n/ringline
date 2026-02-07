@@ -4,7 +4,8 @@
    This namespace provides the main entry points for using the framework:
    - init-framework: Initialize with Malli schemas, get Datomic + Lacinia schemas
    - create-resolver: Create Lacinia resolver functions that use Datomic pull"
-  (:require [clojure.string :as str]
+  (:require [clojure.pprint :as pprint]
+            [clojure.string :as str]
             [com.walmartlabs.lacinia.resolve :as resolve]
             [com.walmartlabs.lacinia.schema :as lacinia-schema]
             [com.walmartlabs.lacinia.util :as util]
@@ -21,10 +22,9 @@
             [ringline.schema.lacinia :as lacinia]
             [ringline.schema.parser :as parser]
             [ringline.schema.scalars :as scalars]
-            [ringline.schema.types :as types]
-            [clojure.pprint :as pprint])
-  (:import [datomic.db Db]
-           [datomic Connection]
+            [ringline.schema.types :as types])
+  (:import [datomic Connection]
+           [datomic.db Db]
            [java.util UUID]))
 
 (defn augment-context
@@ -386,49 +386,49 @@
 
    Example:
      (attach-mutation-resolvers lacinia-schema {:user user-schema} db-conn)"
-  [lacinia-schema schemas datomic-conn namespace-lookup reverse-lookups input-converters]
-  (if-let [mutations (:mutations lacinia-schema)]
-    (let [;; For each mutation, attach a resolver 
-          schemas-map (if (map? schemas) schemas (schemas->schemas-map schemas))
-          mutations-with-resolvers
-          (reduce-kv
-           (fn [acc mutation-name mutation-def]
+  ([lacinia-schema schemas datomic-conn namespace-lookup reverse-lookups input-converters]
+   (if-let [mutations (:mutations lacinia-schema)]
+     (let [;; For each mutation, attach a resolver 
+           schemas-map (if (map? schemas) schemas (schemas->schemas-map schemas))
+           mutations-with-resolvers
+           (reduce-kv
+            (fn [acc mutation-name mutation-def]
              ;; Parse mutation name to extract entity-type and operation
              ;; e.g., :createUser -> entity-type=:user, operation=:create
-             (let [name-str (name mutation-name)
-                   operation (cond
-                               (.startsWith name-str "create") :create
-                               (.startsWith name-str "update") :update
-                               (.startsWith name-str "delete") :delete
-                               :else nil)
-                   entity-name (cond
-                                 (.startsWith name-str "create") (subs name-str 6)
-                                 (.startsWith name-str "update") (subs name-str 6)
-                                 (.startsWith name-str "delete") (subs name-str 6)
-                                 :else nil)
-                   entity-key (when entity-name (keyword (str/lower-case entity-name)))
-                   schema (get schemas-map entity-key)]
+              (let [name-str (name mutation-name)
+                    operation (cond
+                                (.startsWith name-str "create") :create
+                                (.startsWith name-str "update") :update
+                                (.startsWith name-str "delete") :delete
+                                :else nil)
+                    entity-name (cond
+                                  (.startsWith name-str "create") (subs name-str 6)
+                                  (.startsWith name-str "update") (subs name-str 6)
+                                  (.startsWith name-str "delete") (subs name-str 6)
+                                  :else nil)
+                    entity-key (when entity-name (keyword (str/lower-case entity-name)))
+                    schema (get schemas-map entity-key)]
 
-               (if (and operation entity-key schema)
+                (if (and operation entity-key schema)
                  ;; Create and attach resolver
-                 (assoc acc mutation-name
-                        (assoc mutation-def
-                               :resolve (create-mutation-resolver
-                                         entity-key
-                                         operation
-                                         datomic-conn
-                                         schema
-                                         namespace-lookup
-                                         reverse-lookups
-                                         input-converters)))
+                  (assoc acc mutation-name
+                         (assoc mutation-def
+                                :resolve (create-mutation-resolver
+                                          entity-key
+                                          operation
+                                          datomic-conn
+                                          schema
+                                          namespace-lookup
+                                          reverse-lookups
+                                          input-converters)))
                  ;; No schema found, keep mutation as-is
-                 (assoc acc mutation-name mutation-def))))
-           {}
-           mutations)]
+                  (assoc acc mutation-name mutation-def))))
+            {}
+            mutations)]
 
-      (assoc lacinia-schema :mutations mutations-with-resolvers))
+       (assoc lacinia-schema :mutations mutations-with-resolvers))
     ;; No mutations in schema
-    lacinia-schema))
+     lacinia-schema)))
 
 (defn create-query-resolver-map
   "Create a map of automatic query resolvers for a Lacinia schema."
@@ -444,7 +444,8 @@
 (defn auto-framework!
   "Calls init-framework and then transacts the Datomic schema and compiles the Lacinia schema with automatic resolvers."
   [conn schemas]
-  (let [{:keys [datomic lacinia namespace-lookup parsed schemas-map reverse-lookups input-converters] :as framework} (init-framework schemas {})
+  (let [{:keys [datomic lacinia namespace-lookup parsed schemas-map reverse-lookups input-converters]
+         :as framework} (init-framework schemas {})
         tx-data (mapcat datomic/schema->transaction datomic)
         query-resolvers (create-query-resolver-map parsed)
         schema (-> lacinia

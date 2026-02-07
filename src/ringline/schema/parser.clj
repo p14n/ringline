@@ -187,12 +187,20 @@
       (malli-entity->malli-field field-kw)
       (last)))
 
+(defn unwrap-ref [ft]
+  (let [s (when (= :malli.core/schema (type ft))
+            (m/form ft))]
+    (if (and (vector? s) (= (first s) :ref))
+      (second s)
+      ft)))
+
 (defn correct-field-type [f]
-  (if (is-schema-var (last f))
-    (-> (drop-last f)
-        (vec)
-        (conj (field-type-from-schema-var (m/form (last f)) :id)))
-    f))
+  (let [unwrapped (unwrap-ref (last f))]
+    (if (is-schema-var unwrapped)
+      (-> (drop-last f)
+          (vec)
+          (conj (field-type-from-schema-var (m/form unwrapped) :id)))
+      f)))
 
 
 ;; Rich comment block with REPL examples

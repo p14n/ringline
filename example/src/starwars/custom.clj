@@ -15,7 +15,8 @@
    [datomic.api :as d]
    [ringline.core :as ringline]
    [ringline.mutation.transaction :as tx]
-   [ringline.schema.datomic :as ringline-datomic])
+   [ringline.schema.datomic :as ringline-datomic]
+   [clojure.pprint :as pprint])
   (:import
    [java.util UUID]))
 
@@ -38,7 +39,9 @@
    [:email :string]
    [:phone {:optional true} :string]
    [:country_of_residence_code {:optional true} :string]
-   [:date_of_birth {:optional true} :time/local-date]])
+   [:date_of_birth {:optional true} :time/local-date]
+   [:party {:optional true
+            :ringline/reverse-lookup :party/_personal_info} [:ref #'Party]]])
 
 (def Address
   [:map

@@ -28,7 +28,8 @@
   [query]
   (let [response (http/post graphql-url
                             {:headers {"Content-Type" "application/json"}
-                             :body (json/write-str {:query query})})
+                             :body (json/write-str {:query query})
+                             :throw true})
         body (json/read-str (:body response) keyword)]
     body))
 
