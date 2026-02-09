@@ -189,7 +189,7 @@
 
         (testing "All parties in organization"
           (let [result6 (graphql-request
-                         (format "{ allParties(organization: \"%s\") { id personal_info { email } organization { name } }}" id))
+                         (format "{ allParties(organizations: [\"%s\"]) { id personal_info { email } organization { name } }}" id))
                 data (->> result6 :data :allParties (sort-by (comp :email :personal_info)))]
             (is (nil? (:errors result6)) "No errors in response")
             (is (= 2 (count data)) "Returns two parties")

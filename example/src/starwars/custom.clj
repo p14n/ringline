@@ -91,7 +91,7 @@
 (def db-uri "datomic:mem://starwars-custom")
 
 (def custom-operations {:queries {:allParties {:args [:map
-                                                      [:organization :uuid]]
+                                                      [:organizations [:vector :uuid]]]
                                                :return-type [:vector :Party]}}
                         :mutations {:inviteParty {:args [:map [:email :string]
                                                          [:organization :uuid]]
@@ -114,8 +114,8 @@
 (def all-parties-query
   (ringline/create-resolver
    :party
-   (fn [_ctx {:keys [organization]}]
-     [['?e :party/organization [:org/id (UUID/fromString organization)]]])))
+   (fn [_ctx {:keys [organizations]}]
+     [['?e :party/organization [:org/id (UUID/fromString (first organizations))]]])))
 
 (defn create-custom-graphql-system!
   "Create and initialize Datomic in-memory database with schema"

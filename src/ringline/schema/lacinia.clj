@@ -97,8 +97,12 @@
                                     arg-type-schema
                                     (m/type arg-type-schema))
                          graphql-type (resolve-type-reference arg-type)
+                         list? (= graphql-type 'list)
+                         list-element-type (when list? (second (m/form arg-type-schema)))
                          optional? (:optional arg-properties)]
-                     [arg-name (cond-> {:type graphql-type}
+                     [arg-name (cond-> {:type (if list?
+                                                (list 'list (resolve-type-reference list-element-type))
+                                                graphql-type)}
                                  optional? (assoc :optional true))]))
                  children)))
     {}))
