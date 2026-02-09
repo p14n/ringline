@@ -349,15 +349,22 @@
        (let [datomic-conn (context->conn context)
              {:keys [namespace-lookup reverse-lookups input-converters]} (context->framework-data context)
              query-ctx (converter/build-query-context context entity-type args)
+             query-enter (if (and (map? query-interceptor) (:enter query-interceptor))
+                           (:enter query-interceptor)
+                           query-interceptor)
+             query-leave (if (and (map? query-interceptor) (:leave query-interceptor))
+                           (:leave query-interceptor)
+                           (fn [_context _args query] query))
              ;; Convert to Datomic pull pattern with where clauses
              pull-result (->> (converter/pull-with-args query-ctx namespace-lookup reverse-lookups input-converters)
                               (construct-query)
-                              (query-interceptor context args))]
+                              (query-enter context args))]
 
          ;; Execute Datomic query
-         (-> pull-result
-             (do-query datomic-conn)
-             (transform-response query-ctx namespace-lookup)))
+         (as-> pull-result x
+           (do-query x datomic-conn)
+           (transform-response x query-ctx namespace-lookup)
+           (query-leave context args x)))
 
        (catch Exception e
          (throw (ex-info "Resolver execution failed"
