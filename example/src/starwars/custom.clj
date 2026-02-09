@@ -114,8 +114,12 @@
 (def all-parties-query
   (ringline/create-resolver
    :party
-   (fn [_ctx {:keys [organizations]}]
-     [['?e :party/organization [:org/id (UUID/fromString (first organizations))]]])))
+   (fn [_ {:keys [organizations]} query]
+     (let [uuids (->> organizations (map UUID/fromString) (set))]
+       (merge query
+              {:where ['[?e :party/organization ?org]
+                       '[?org :org/id ?v]
+                       [(list 'contains? uuids '?v)]]})))))
 
 (defn create-custom-graphql-system!
   "Create and initialize Datomic in-memory database with schema"

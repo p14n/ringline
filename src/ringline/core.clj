@@ -297,20 +297,20 @@
           ;; Re-throw to let Lacinia handle error formatting
           (throw e))))))
 
-(defn do-query [{:keys [pattern where-clauses]} conn]
+(defn construct-query [{:keys [pattern where-clauses]}]
+  {:find [(list 'pull '?e pattern)]
+   :where where-clauses})
+
+(defn do-query [query conn]
   ;; Execute Datomic query
   (if conn
     (try (let [db (ensure-db conn)
                ;; Execute query with where clauses if present
-               entities (if (seq where-clauses)
-                          (->> (d/q {:find [(list 'pull '?e pattern)]
-                                     :where where-clauses} db)
-                               (map first))
-                          [])]
+               entities (->> (d/q query db)
+                             (map first))]
            entities)
          (catch Exception e
-           (throw (ex-info "Datomic query failed" {:pattern pattern
-                                                   :where-clauses where-clauses}
+           (throw (ex-info "Datomic query failed" {:query query}
                            e))))
     nil))
 
@@ -341,22 +341,18 @@
    Example:
      (create-resolver :User db-conn parsed-user-schema)"
   ([entity-type]
-   (create-resolver entity-type nil))
-  ([entity-type where-clauses-or-fn]
+   (create-resolver entity-type (fn [_context _args query] query)))
+  ([entity-type query-interceptor]
    (fn resolver [context args _value]
      (try
        ;; Build query context from Lacinia, passing args explicitly
        (let [datomic-conn (context->conn context)
              {:keys [namespace-lookup reverse-lookups input-converters]} (context->framework-data context)
              query-ctx (converter/build-query-context context entity-type args)
-             wheres (if (fn? where-clauses-or-fn)
-                      (where-clauses-or-fn context args)
-                      where-clauses-or-fn)
              ;; Convert to Datomic pull pattern with where clauses
-             pull-result (-> (converter/pull-with-args query-ctx namespace-lookup reverse-lookups input-converters)
-                             (update :where-clauses (fn [clauses] (if (seq wheres)
-                                                                    (vec wheres)
-                                                                    clauses))))]
+             pull-result (->> (converter/pull-with-args query-ctx namespace-lookup reverse-lookups input-converters)
+                              (construct-query)
+                              (query-interceptor context args))]
 
          ;; Execute Datomic query
          (-> pull-result
@@ -393,8 +389,8 @@
            mutations-with-resolvers
            (reduce-kv
             (fn [acc mutation-name mutation-def]
-             ;; Parse mutation name to extract entity-type and operation
-             ;; e.g., :createUser -> entity-type=:user, operation=:create
+              ;; Parse mutation name to extract entity-type and operation
+              ;; e.g., :createUser -> entity-type=:user, operation=:create
               (let [name-str (name mutation-name)
                     operation (cond
                                 (.startsWith name-str "create") :create
@@ -410,7 +406,7 @@
                     schema (get schemas-map entity-key)]
 
                 (if (and operation entity-key schema)
-                 ;; Create and attach resolver
+                  ;; Create and attach resolver
                   (assoc acc mutation-name
                          (assoc mutation-def
                                 :resolve (create-mutation-resolver
@@ -421,13 +417,13 @@
                                           namespace-lookup
                                           reverse-lookups
                                           input-converters)))
-                 ;; No schema found, keep mutation as-is
+                  ;; No schema found, keep mutation as-is
                   (assoc acc mutation-name mutation-def))))
             {}
             mutations)]
 
        (assoc lacinia-schema :mutations mutations-with-resolvers))
-    ;; No mutations in schema
+     ;; No mutations in schema
      lacinia-schema)))
 
 (defn create-query-resolver-map
