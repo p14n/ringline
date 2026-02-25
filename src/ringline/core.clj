@@ -32,7 +32,9 @@
   [context framework-data conn]
   (assoc context
          :ringline {:conn conn
-                    :framework framework-data}))
+                    :framework (or
+                                (:framework framework-data)
+                                framework-data)}))
 
 (defn context->framework-data [context]
   (or (-> context :ringline :framework)
