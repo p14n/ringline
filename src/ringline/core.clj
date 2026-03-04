@@ -501,4 +501,18 @@
       (catch Exception e
         (respond-with-error context :TRANSACTION_FAILED "Datomic transaction failed" e)))))
 
+(defn combine-interceptors [& interceptors]
+  (let [enter-fns (remove nil? (map :enter interceptors))
+        leave-fns (remove nil? (map :leave interceptors))]
+    {:enter (fn [ctx args query]
+              (reduce #(%2 ctx args %1) query enter-fns))
+     :leave (fn [ctx args result]
+              (reduce #(%2 ctx args %1) result leave-fns))}))
+
+(defn enter-interceptor [fn]
+  {:enter fn})
+
+(defn add-wheres [{:keys [where]
+                   :as q} wheres]
+  (assoc q :where (vec (concat where wheres))))
 
