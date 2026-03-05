@@ -3,10 +3,10 @@
 
    This namespace transforms mutation inputs into Datomic-compatible
    transaction maps with proper tempids, lookup refs, and namespaced attributes."
-  (:require [ringline.schema.scalars :as scalars]
-            [ringline.schema.parser :as parser]
+  (:require [clojure.string :as str]
             [datomic.api :as da]
-            [clojure.string :as str])
+            [ringline.schema.parser :as parser]
+            [ringline.schema.scalars :as scalars])
   (:import [java.time OffsetDateTime]
            [java.util UUID]))
 
@@ -94,13 +94,15 @@
       (let [props (second field-type)
             precision (get props :precision 38)
             scale (get props :scale 10)]
-        (scalars/parse-decimal value {:precision precision :scale scale}))
+        (scalars/parse-decimal value {:precision precision
+                                      :scale scale}))
       value)
 
     ;; Simple :decimal keyword (no properties)
     (= field-type :decimal)
     (if (string? value)
-      (scalars/parse-decimal value {:precision 38 :scale 10})
+      (scalars/parse-decimal value {:precision 38
+                                    :scale 10})
       value)
 
     ;; Default: pass through

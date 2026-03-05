@@ -152,10 +152,11 @@
   "Convert all fields to Lacinia field definitions.
    Field names are used as-is (no conversion)."
   [fields relationships]
-  (into {}
-        (map (fn [field]
-               [(:name field) (field->graphql-field field relationships)])
-             fields)))
+  (->> fields
+       (remove #(some-> % :properties :ringline/lacinia (false?)))
+       (map (fn [field]
+              [(:name field) (field->graphql-field field relationships)]))
+       (into {})))
 
 ;; Object type generation
 
