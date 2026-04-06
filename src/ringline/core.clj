@@ -484,22 +484,18 @@
 (defn transact-and-pull
   [tx-data-fn response-entity-type response-id]
   (fn [context args v]
-    (try
-      (let [datomic-conn (context->conn context)
-            tx-data (tx-data-fn context args v)
-            _tx-result (mutation-executor/execute-transaction datomic-conn tx-data)
+    (let [datomic-conn (context->conn context)
+          tx-data (tx-data-fn context args v)
+          _tx-result (mutation-executor/execute-transaction datomic-conn tx-data)
 
-            result-entity-id (cond
-                               (keyword? response-id) (->> (map response-id tx-data)
-                                                           (filter some?)
-                                                           (first)
-                                                           (conj [response-id])
-                                                           (vec))
-                               :else response-id)]
-        (pull-and-transform context args result-entity-id response-entity-type))
-
-      (catch Exception e
-        (respond-with-error context :TRANSACTION_FAILED "Datomic transaction failed" e)))))
+          result-entity-id (cond
+                             (keyword? response-id) (->> (map response-id tx-data)
+                                                         (filter some?)
+                                                         (first)
+                                                         (conj [response-id])
+                                                         (vec))
+                             :else response-id)]
+      (pull-and-transform context args result-entity-id response-entity-type))))
 
 (defn combine-interceptors [& interceptors]
   (let [enter-fns (remove nil? (map :enter interceptors))

@@ -3,11 +3,11 @@
 
    This namespace orchestrates the complete mutation execution flow:
    validation, transaction building, execution, and result formatting."
-  (:require [malli.core :as m]
-            [ringline.mutation.parser :as parser]
-            [ringline.mutation.transaction :as tx]
+  (:require [clojure.string :as str]
             [datomic.api]
-            [clojure.string :as str]))
+            [malli.core :as m]
+            [ringline.mutation.parser :as parser]
+            [ringline.mutation.transaction :as tx]))
 
 ;; T065: Implement check-operation-allowed
 (defn check-operation-allowed
@@ -221,7 +221,6 @@
       ;; Step 2: Build transaction (use preprocessed input)
       (try
         (let [tx-data (tx/mutation-input->transaction preprocessed-input parsed-schema schema)
-
               ;; Step 3: Execute transaction
               _tx-result (execute-transaction db-conn tx-data)
 

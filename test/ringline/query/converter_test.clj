@@ -59,7 +59,7 @@
     (let [query-ctx {:entity-type :User
                      :selections [:id :email :username]
                      :arguments {}
-                     :nested-queries {}}
+                     :nested-queries {:address {:selections [:id]}}}
           result (converter/graphql->pull query-ctx)
           pattern (:pattern result)]
       (is (some #(= :user/id %) pattern) "Pattern includes id")
@@ -75,26 +75,26 @@
           pattern (:pattern result)]
       (is (some map? pattern) "Pattern contains nested pull for relationship")))
 
-  #_(testing "graphql->pull handles multiple levels of nesting"
-      (let [query-ctx {:entity-type :User
-                       :selections [:id :posts]
-                       :arguments {}
-                       :nested-queries {:posts {:selections [:id :author]
-                                                :nested-queries {:author {:selections [:id :username]}}}}}
-            result (converter/graphql->pull query-ctx)]
-        (is (= [:user/id {:user/posts [:post/id :post/author {:post/author [:author/id :author/username]}]}]
-               (:pattern result)) "Returns valid pattern with deep nesting")))
+  (testing "graphql->pull handles multiple levels of nesting"
+    (let [query-ctx {:entity-type :User
+                     :selections [:id :posts]
+                     :arguments {}
+                     :nested-queries {:posts {:selections [:id :author]
+                                              :nested-queries {:author {:selections [:id :username]}}}}}
+          result (converter/graphql->pull query-ctx)]
+      (is (= [:user/id {:user/posts [:posts/id :posts/author {:posts/author [:author/id :author/username]}]}]
+             (:pattern result)) "Returns valid pattern with deep nesting")))
 
-  #_(testing "graphql->pull handles multiple levels of nesting"
-      (let [query-ctx {:entity-type :User
-                       :selections [:id :posts]
-                       :arguments {}
-                       :nested-queries {:posts {:selections [:id :author]
-                                                :nested-queries {:author {:selections [:id :username]}}}}}
-            result (converter/pull-with-args query-ctx {} {[:post :author] :author/_posts} {})]
-        (is (=
-             [:user/id {:user/posts [:post/id :post/author {[:author/_posts :as :post/author] [:author/id :author/username]}]}]
-             (:pattern result)) "Returns valid pattern with deep nesting and reverse lookups")))
+  (testing "graphql->pull handles multiple levels of nesting"
+    (let [query-ctx {:entity-type :User
+                     :selections [:id :posts]
+                     :arguments {}
+                     :nested-queries {:posts {:selections [:id :author]
+                                              :nested-queries {:author {:selections [:id :username]}}}}}
+          result (converter/pull-with-args query-ctx {} {[:posts :author] :author/_posts} {})]
+      (is (=
+           [:user/id {:user/posts [:posts/id :posts/author {[:author/_posts :as :posts/author] [:author/id :author/username]}]}]
+           (:pattern result)) "Returns valid pattern with deep nesting and reverse lookups")))
 
   (testing "graphql->pull handles empty selections"
     (let [query-ctx {:entity-type :User

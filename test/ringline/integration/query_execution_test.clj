@@ -1,101 +1,140 @@
 (ns ringline.integration.query-execution-test
   "Integration tests for end-to-end query conversion"
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.set :as set]
+            [clojure.test :refer [deftest is testing]]
+            [com.walmartlabs.lacinia :as lacinia]
+            [com.walmartlabs.lacinia.schema :as lacinia-schema]
+            [ringline.core :as ringline]
             [ringline.query.converter :as converter]
             [ringline.response.transformer :as transformer]
             [ringline.schema.parser :as parser]
             [ringline.fixtures :as fixtures]))
 
-#_(deftest end-to-end-query-conversion-test
-    #_(testing "Complete workflow: Lacinia context -> QueryContext -> PullPattern"
-        (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
-                           {:selections {:id {} :email {} :username {}}
-                            :arguments {}}}
-              query-ctx (converter/build-query-context lacinia-ctx :User)
-              pull-pattern (converter/graphql->pull query-ctx)]
+(deftest end-to-end-query-conversion-test
+  (testing "Complete workflow: Lacinia context -> QueryContext -> PullPattern"
+    ;; Minimal schema — no relationships so the compiled schema needs only one object type.
+    ;; No :ringline/searchable so the generated :user query takes no args.
+    (let [user-schema [:map
+                       {:ringline/schema-name :user
+                        :ringline/datomic-ns "user"
+                        :ringline/query-root true}
+                       [:id :uuid]
+                       [:email :string]
+                       [:username :string]]
 
-          (testing "Query context is built correctly"
-            (is (= :User (:entity-type query-ctx)))
-            (is (seq (:selections query-ctx)))
-            (is (map? (:arguments query-ctx))))
+          ;; Atom to capture what build-query-context returns when given a real Lacinia context.
+          captured (atom nil)
 
-          #_(testing "Pull pattern is generated correctly"
-              (is (vector? (:pattern pull-pattern)))
-              (is (seq (:pattern pull-pattern)))
-              (is (some #(= :user/id %) (:pattern pull-pattern)))
-              (is (some #(= :user/email %) (:pattern pull-pattern)))
-              (is (some #(= :user/username %) (:pattern pull-pattern))))))
+          ;; Capturing resolver: receives the live Lacinia resolver context (which carries a
+          ;; real SelectionSet protocol object), calls build-query-context on it, stores the
+          ;; result and returns nil — no Datomic connection required.
+          capturing-resolver (fn [context args _value]
+                               (reset! captured
+                                       (converter/build-query-context context :User args))
+                               nil)
 
-    #_(testing "Query with arguments generates where clauses"
-        (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
-                           {:selections {:id {} :email {}}
-                            :arguments {:email "test@example.com"}}}
-              query-ctx (converter/build-query-context lacinia-ctx :User)
-              result (converter/pull-with-args query-ctx {} {} {})]
+          ;; Build the Lacinia schema map through the framework, then attach our capturing
+          ;; resolver and compile.  assoc-in replaces any placeholder at [:queries :user :resolve].
+          compiled-schema (-> (ringline/init-framework [user-schema] {})
+                              :lacinia
+                              (assoc-in [:queries :user :resolve] capturing-resolver)
+                              (lacinia-schema/compile))
 
-          (is (vector? (:pattern result)) "Has pull pattern")
-          (is (vector? (:where-clauses result)) "Has where clauses")
-          (is (seq (:where-clauses result)) "Where clauses generated for arguments")))
+          ;; Execute a real GraphQL query — this causes Lacinia to call capturing-resolver
+          ;; with a live context containing the real SelectionSet protocol objects.
+          _result (lacinia/execute compiled-schema
+                                   "{ user { id email username } }"
+                                   nil
+                                   {})
 
-    #_(testing "Nested relationship query generates nested pull"
-        (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
-                           {:selections {:id {}
-                                         :email {}
-                                         :posts {:selections {:id {} :title {} :content {}}}}
-                            :arguments {}}}
-              query-ctx (converter/build-query-context lacinia-ctx :User)
-              pull-pattern (converter/graphql->pull query-ctx)]
+          query-ctx   @captured
+          pull-pattern (converter/graphql->pull query-ctx)]
 
-          (testing "Nested query context is captured"
-            (is (contains? (:nested-queries query-ctx) :posts))
-            (is (seq (get-in query-ctx [:nested-queries :posts :selections]))))
+      (testing "Query context is built correctly from a real Lacinia context"
+        (is (some? query-ctx) "Resolver was invoked and context was captured")
+        (is (= :User (:entity-type query-ctx)))
+        (is (seq (:selections query-ctx)))
+        (is (map? (:arguments query-ctx)))
+        (is (set/subset? #{:id :email :username} (set (:selections query-ctx)))
+            "All queried fields appear in selections"))
 
-          (testing "Pull pattern includes nested relationship"
-            (is (some map? (:pattern pull-pattern)) "Pattern contains nested pull map"))))
+      (testing "Pull pattern is generated correctly"
+        (is (vector? (:pattern pull-pattern)))
+        (is (seq (:pattern pull-pattern)))
+        (is (some #(= :user/id %) (:pattern pull-pattern)))
+        (is (some #(= :user/email %) (:pattern pull-pattern)))
+        (is (some #(= :user/username %) (:pattern pull-pattern))))))
 
-    #_(testing "Multi-level nested relationships"
-        (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
-                           {:selections {:id {}
-                                         :posts {:selections {:id {}
-                                                              :title {}
-                                                              :author {:selections {:id {} :username {}}}}}}
-                            :arguments {}}}
-              query-ctx (converter/build-query-context lacinia-ctx :User)
-              pull-pattern (converter/graphql->pull query-ctx)]
+  #_(testing "Query with arguments generates where clauses"
+      (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
+                         {:selections {:id {} :email {}}
+                          :arguments {:email "test@example.com"}}}
+            query-ctx (converter/build-query-context lacinia-ctx :User)
+            result (converter/pull-with-args query-ctx {} {} {})]
 
-          (is (vector? (:pattern pull-pattern)) "Generates valid pattern for deep nesting")
-          (is (some map? (:pattern pull-pattern)) "Contains nested structures")))
+        (is (vector? (:pattern result)) "Has pull pattern")
+        (is (vector? (:where-clauses result)) "Has where clauses")
+        (is (seq (:where-clauses result)) "Where clauses generated for arguments")))
 
-    #_(testing "Query with multiple arguments"
-        (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
-                           {:selections {:id {} :email {} :username {}}
-                            :arguments {:email "test@example.com" :username "testuser"}}}
-              query-ctx (converter/build-query-context lacinia-ctx :User)
-              result (converter/pull-with-args query-ctx {} {} {})]
+  #_(testing "Nested relationship query generates nested pull"
+      (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
+                         {:selections {:id {}
+                                       :email {}
+                                       :posts {:selections {:id {} :title {} :content {}}}}
+                          :arguments {}}}
+            query-ctx (converter/build-query-context lacinia-ctx :User)
+            pull-pattern (converter/graphql->pull query-ctx)]
 
-          (is (>= (count (:where-clauses result)) 2)
-              "Generates where clause for each argument")))
+        (testing "Nested query context is captured"
+          (is (contains? (:nested-queries query-ctx) :posts))
+          (is (seq (get-in query-ctx [:nested-queries :posts :selections]))))
 
-    #_(testing "Query without arguments has no where clauses"
-        (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
-                           {:selections {:id {} :email {}}
-                            :arguments {}}}
-              query-ctx (converter/build-query-context lacinia-ctx :User)
-              result (converter/pull-with-args query-ctx {} {} {})]
+        (testing "Pull pattern includes nested relationship"
+          (is (some map? (:pattern pull-pattern)) "Pattern contains nested pull map"))))
 
-          (is (empty? (:where-clauses result)) "No where clauses when no arguments")))
+  #_(testing "Multi-level nested relationships"
+      (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
+                         {:selections {:id {}
+                                       :posts {:selections {:id {}
+                                                            :title {}
+                                                            :author {:selections {:id {} :username {}}}}}}
+                          :arguments {}}}
+            query-ctx (converter/build-query-context lacinia-ctx :User)
+            pull-pattern (converter/graphql->pull query-ctx)]
 
-    #_(testing "Complex query with both nesting and arguments"
-        (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
-                           {:selections {:id {}
-                                         :email {}
-                                         :posts {:selections {:id {} :title {}}}}
-                            :arguments {:email "test@example.com"}}}
-              query-ctx (converter/build-query-context lacinia-ctx :User)
-              result (converter/pull-with-args query-ctx {} {} {})]
-          (is (vector? (:pattern result)) "Has pull pattern")
-          (is (seq (:where-clauses result)) "Has where clauses")
-          (is (some map? (:pattern result)) "Pattern includes nested pulls"))))
+        (is (vector? (:pattern pull-pattern)) "Generates valid pattern for deep nesting")
+        (is (some map? (:pattern pull-pattern)) "Contains nested structures")))
+
+  #_(testing "Query with multiple arguments"
+      (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
+                         {:selections {:id {} :email {} :username {}}
+                          :arguments {:email "test@example.com" :username "testuser"}}}
+            query-ctx (converter/build-query-context lacinia-ctx :User)
+            result (converter/pull-with-args query-ctx {} {} {})]
+
+        (is (>= (count (:where-clauses result)) 2)
+            "Generates where clause for each argument")))
+
+  #_(testing "Query without arguments has no where clauses"
+      (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
+                         {:selections {:id {} :email {}}
+                          :arguments {}}}
+            query-ctx (converter/build-query-context lacinia-ctx :User)
+            result (converter/pull-with-args query-ctx {} {} {})]
+
+        (is (empty? (:where-clauses result)) "No where clauses when no arguments")))
+
+  #_(testing "Complex query with both nesting and arguments"
+      (let [lacinia-ctx {:com.walmartlabs.lacinia/selection
+                         {:selections {:id {}
+                                       :email {}
+                                       :posts {:selections {:id {} :title {}}}}
+                          :arguments {:email "test@example.com"}}}
+            query-ctx (converter/build-query-context lacinia-ctx :User)
+            result (converter/pull-with-args query-ctx {} {} {})]
+        (is (vector? (:pattern result)) "Has pull pattern")
+        (is (seq (:where-clauses result)) "Has where clauses")
+        (is (some map? (:pattern result)) "Pattern includes nested pulls"))))
 
 (deftest end-to-end-response-transformation-test
   (testing "Complete workflow: Datomic entity -> GraphQL response"
