@@ -32,6 +32,10 @@
 
 (declare extract-nested-from-tree)
 
+(defn dedupe-selections [selections nested]
+  (let [ks (set (keys nested))]
+    (remove ks selections)))
+
 (defn extract-nested-from-tree-kv [[k v]]
   (cond (= [nil] v) nil
         (map? v) (extract-nested-from-tree v)
@@ -40,7 +44,7 @@
                           extracted (extract-nested-from-tree maybe-nested)
                           s (qualified-field->simple k)]
                       (if (seq extracted)
-                        [s {:selections []
+                        [s {:selections (dedupe-selections selected extracted)
                             :nested-queries extracted}]
                         [s {:selections selected}])))
         :else nil))

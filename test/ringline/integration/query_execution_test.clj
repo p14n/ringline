@@ -10,19 +10,34 @@
             [ringline.schema.parser :as parser]
             [ringline.fixtures :as fixtures]))
 
+(def City [:map
+           {:ringline/schema-name :city
+            :ringline/datomic-ns "city"}
+           [:id :uuid]
+           [:name :string]])
+
+(def Address [:map
+              {:ringline/schema-name :address
+               :ringline/datomic-ns "address"}
+              [:id :uuid]
+              [:postcode :string]
+              [:status [:enum :current :old]]
+              [:city #'City]])
+
+(def User [:map
+           {:ringline/schema-name :user
+            :ringline/datomic-ns "user"
+            :ringline/query-root true}
+           [:id :uuid]
+           [:email :string]
+           [:address #'Address]
+           [:username :string]])
+
 (deftest end-to-end-query-conversion-test
   (testing "Complete workflow: Lacinia context -> QueryContext -> PullPattern"
     ;; Minimal schema — no relationships so the compiled schema needs only one object type.
     ;; No :ringline/searchable so the generated :user query takes no args.
-    (let [user-schema [:map
-                       {:ringline/schema-name :user
-                        :ringline/datomic-ns "user"
-                        :ringline/query-root true}
-                       [:id :uuid]
-                       [:email :string]
-                       [:username :string]]
-
-          ;; Atom to capture what build-query-context returns when given a real Lacinia context.
+    (let [          ;; Atom to capture what build-query-context returns when given a real Lacinia context.
           captured (atom nil)
 
           ;; Capturing resolver: receives the live Lacinia resolver context (which carries a
@@ -35,7 +50,7 @@
 
           ;; Build the Lacinia schema map through the framework, then attach our capturing
           ;; resolver and compile.  assoc-in replaces any placeholder at [:queries :user :resolve].
-          compiled-schema (-> (ringline/init-framework [user-schema] {})
+          compiled-schema (-> (ringline/init-framework [User Address City] {})
                               :lacinia
                               (assoc-in [:queries :user :resolve] capturing-resolver)
                               (lacinia-schema/compile))
@@ -43,7 +58,7 @@
           ;; Execute a real GraphQL query — this causes Lacinia to call capturing-resolver
           ;; with a live context containing the real SelectionSet protocol objects.
           _result (lacinia/execute compiled-schema
-                                   "{ user { id email username } }"
+                                   "{ user { id email username address { id status city {id name}} } }"
                                    nil
                                    {})
 
@@ -55,10 +70,17 @@
         (is (= :User (:entity-type query-ctx)))
         (is (seq (:selections query-ctx)))
         (is (map? (:arguments query-ctx)))
-        (is (set/subset? #{:id :email :username} (set (:selections query-ctx)))
+        (is (set/subset? #{:id :email :username :address} (set (:selections query-ctx)))
             "All queried fields appear in selections"))
 
       (testing "Pull pattern is generated correctly"
+        (is (= [:user/id
+                :user/email
+                :user/username
+                {:user/address [:address/id
+                                :address/status
+                                {:address/city [:city/id :city/name]}]}]
+               (:pattern pull-pattern)))
         (is (vector? (:pattern pull-pattern)))
         (is (seq (:pattern pull-pattern)))
         (is (some #(= :user/id %) (:pattern pull-pattern)))
