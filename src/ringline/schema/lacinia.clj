@@ -112,7 +112,10 @@
 
   T031: Extended to handle :time/local-date"
   [field]
-  (let [base-type (types/malli-type->graphql-type (:type field))]
+  (let [{:keys [type ref-id-field-type]} field
+        base-type (if ref-id-field-type
+                    (types/malli-type->graphql-type ref-id-field-type)
+                    (types/malli-type->graphql-type type))]
     (if (= :many (:cardinality field))
       (list 'list base-type)
       base-type)))

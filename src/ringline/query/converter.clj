@@ -1,8 +1,8 @@
 (ns ringline.query.converter
   "Convert GraphQL queries to Datomic pull patterns"
-  (:require [malli.core :as m]
-            [clojure.string :as str]
-            [com.walmartlabs.lacinia.executor :as executor]))
+  (:require [clojure.string :as str]
+            [com.walmartlabs.lacinia.executor :as executor]
+            [malli.core :as m]))
 
 ;; Malli schemas for validation
 (def PullPattern
@@ -102,15 +102,20 @@
           (.printStackTrace e)
           (throw e)))))
 
-;; Pull pattern generation
 
+(defn ensure-keyword [maybe-keyword]
+  (if (keyword? maybe-keyword)
+    maybe-keyword
+    (keyword maybe-keyword)))
+
+;; Pull pattern generation
 (defn- generate-nested-pull
   "Generate nested pull pattern for a relationship field"
   [entity-type field-name nested-query namespace-lookup reverse-lookups]
   (let [nested-selections (:selections nested-query)
         nested-nested (:nested-queries nested-query)
         ;; Assume relationship field name matches target entity (e.g., :posts -> :post)
-        target-entity (or (get namespace-lookup [entity-type field-name])
+        target-entity (or (get namespace-lookup [(ensure-keyword entity-type) field-name])
                           (keyword ;(str/replace (name field-name) #"s$" "")
                            (name field-name)))
         namespaced-fields (mapv #(keyword->namespaced target-entity namespace-lookup %) nested-selections)

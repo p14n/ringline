@@ -27,7 +27,8 @@
 (def User [:map
            {:ringline/schema-name :user
             :ringline/datomic-ns "user"
-            :ringline/query-root true}
+            :ringline/query-root true
+            :ringline/searchable [:address]}
            [:id :uuid]
            [:email :string]
            [:address #'Address]
