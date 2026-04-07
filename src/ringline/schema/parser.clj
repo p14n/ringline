@@ -245,11 +245,12 @@
 (defn- resolve-relationship-target
   "Resolve the target entity for a relationship based on field name"
   [relationship schema-names]
-  (let [field-name (name (:field relationship))
+  (let [;field-name (name (:field relationship))
+        target (:target relationship)
         ;; Try to match field name to schema name (e.g., :posts -> :post)
-        potential-targets (filter #(or (= field-name (name %))
-                                       (= field-name (str (name %) "s"))
-                                       (= (str field-name "s") (name %)))
+        potential-targets (filter #(= % target) #_(or (= field-name (name %))
+                                                      (= field-name (str (name %) "s"))
+                                                      (= (str field-name "s") (name %)))
                                   schema-names)]
     (if (seq potential-targets)
       (assoc relationship :target (first potential-targets))
