@@ -124,7 +124,7 @@
                        (mapv (fn [[nested-field nested-data]]
                                (generate-nested-pull target-entity nested-field nested-data namespace-lookup reverse-lookups))
                              nested-nested))
-        reverse-lookup (get reverse-lookups [entity-type field-name])]
+        reverse-lookup (get reverse-lookups [(ensure-keyword entity-type) field-name])]
     {(or
       (when reverse-lookup [reverse-lookup :as (keyword->namespaced entity-type namespace-lookup field-name)])
       (keyword->namespaced entity-type namespace-lookup field-name))
