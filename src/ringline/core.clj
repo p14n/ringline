@@ -486,14 +486,16 @@
   (fn [context args v]
     (let [datomic-conn (context->conn context)
           tx-data (tx-data-fn context args v)
-          _tx-result (mutation-executor/execute-transaction datomic-conn tx-data)
+          _tx-result (when (seq tx-data)
+                       (mutation-executor/execute-transaction datomic-conn tx-data))
 
           result-entity-id (cond
-                             (keyword? response-id) (->> (map response-id tx-data)
-                                                         (filter some?)
-                                                         (first)
-                                                         (conj [response-id])
-                                                         (vec))
+                             (keyword? response-id) (some->> tx-data
+                                                             (map response-id)
+                                                             (filter some?)
+                                                             (first)
+                                                             (conj [response-id])
+                                                             (vec))
                              :else response-id)]
       (pull-and-transform context args result-entity-id response-entity-type))))
 
