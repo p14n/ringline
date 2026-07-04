@@ -317,9 +317,10 @@
     nil))
 
 (defn transform-response [multiple-response? entities query-ctx namespace-lookup]
-  (if multiple-response?
-    (mapv #(transformer/transform-with-selections % query-ctx namespace-lookup) entities)
-    (transformer/transform-with-selections (first entities) query-ctx namespace-lookup)))
+  (cond
+    (not (seq entities)) nil
+    multiple-response? (mapv #(transformer/transform-with-selections % query-ctx namespace-lookup) entities)
+    :else (transformer/transform-with-selections (first entities) query-ctx namespace-lookup)))
 
 (defn create-resolver
   "Create a Lacinia resolver function that uses Datomic pull.
