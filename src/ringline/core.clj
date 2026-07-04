@@ -316,11 +316,10 @@
                            e))))
     nil))
 
-(defn transform-response [entities query-ctx namespace-lookup]
-  (cond
-    (= 1 (count entities)) (transformer/transform-with-selections (first entities) query-ctx namespace-lookup)
-    (seq entities) (mapv #(transformer/transform-with-selections % query-ctx namespace-lookup) entities)
-    :else nil))
+(defn transform-response [multiple-response? entities query-ctx namespace-lookup]
+  (if multiple-response?
+    (mapv #(transformer/transform-with-selections % query-ctx namespace-lookup) entities)
+    (transformer/transform-with-selections (first entities) query-ctx namespace-lookup)))
 
 (defn create-resolver
   "Create a Lacinia resolver function that uses Datomic pull.
@@ -349,8 +348,10 @@
      (try
        ;; Build query context from Lacinia, passing args explicitly
        (let [datomic-conn (context->conn context)
+             multiple-response? (vector? entity-type)
+             entity-type-inner (if multiple-response? (first entity-type) entity-type)
              {:keys [namespace-lookup reverse-lookups input-converters]} (context->framework-data context)
-             query-ctx (converter/build-query-context context entity-type args)
+             query-ctx (converter/build-query-context context entity-type-inner args)
              query-enter (if (and (map? query-interceptor) (:enter query-interceptor))
                            (:enter query-interceptor)
                            query-interceptor)
@@ -365,7 +366,7 @@
          ;; Execute Datomic query
          (as-> pull-result x
            (do-query x datomic-conn)
-           (transform-response x query-ctx namespace-lookup)
+           (transform-response multiple-response? x query-ctx namespace-lookup)
            (query-leave context args x)))
 
        (catch Exception e

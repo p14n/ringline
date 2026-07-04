@@ -113,7 +113,7 @@
 
 (def all-parties-query
   (ringline/create-resolver
-   :party
+   [:party]
    (fn [_ {:keys [organizations]} query]
      (let [uuids (->> organizations (map UUID/fromString) (set))]
        (merge query
